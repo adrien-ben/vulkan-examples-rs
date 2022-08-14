@@ -13,6 +13,7 @@ pub struct VkPhysicalDevice {
     pub(crate) supported_extensions: Vec<String>,
     pub(crate) supported_surface_formats: Vec<vk::SurfaceFormatKHR>,
     pub(crate) supported_present_modes: Vec<vk::PresentModeKHR>,
+    pub(crate) supports_ray_tracing: bool,
     pub(crate) supports_dynamic_rendering: bool,
     pub(crate) supports_synchronization2: bool,
 }
@@ -70,10 +71,24 @@ impl VkPhysicalDevice {
                 .get_physical_device_surface_present_modes(inner, surface.surface_khr)?
         };
 
+        let mut ray_tracing_feature = vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::default();
+        let mut acceleration_struct_feature =
+            vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default();
+        let mut features12 = vk::PhysicalDeviceVulkan12Features::builder()
+            .runtime_descriptor_array(true)
+            .buffer_device_address(true);
         let mut features13 = vk::PhysicalDeviceVulkan13Features::default();
-        let mut features = vk::PhysicalDeviceFeatures2::builder().push_next(&mut features13);
+        let mut features = vk::PhysicalDeviceFeatures2::builder()
+            .push_next(&mut ray_tracing_feature)
+            .push_next(&mut acceleration_struct_feature)
+            .push_next(&mut features12)
+            .push_next(&mut features13);
         unsafe { instance.get_physical_device_features2(inner, &mut features) };
 
+        let supports_ray_tracing = ray_tracing_feature.ray_tracing_pipeline == vk::TRUE
+            && acceleration_struct_feature.acceleration_structure == vk::TRUE
+            && features12.runtime_descriptor_array == vk::TRUE
+            && features12.buffer_device_address == vk::TRUE;
         let supports_dynamic_rendering = features13.dynamic_rendering == vk::TRUE;
         let supports_synchronization2 = features13.synchronization2 == vk::TRUE;
 
@@ -84,6 +99,7 @@ impl VkPhysicalDevice {
             supported_extensions,
             supported_surface_formats,
             supported_present_modes,
+            supports_ray_tracing,
             supports_dynamic_rendering,
             supports_synchronization2,
         })

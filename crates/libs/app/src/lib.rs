@@ -1,6 +1,7 @@
 pub extern crate anyhow;
 pub extern crate glam;
 pub extern crate log;
+pub extern crate vulkan;
 
 use anyhow::Result;
 use ash::vk::{self};
@@ -31,6 +32,7 @@ pub struct BaseApp<B: App> {
     command_buffers: Vec<VkCommandBuffer>,
     in_flight_frames: InFlightFrames,
     pub context: VkContext,
+    raytracing_enabled: bool,
 }
 
 pub trait App: Sized {
@@ -40,12 +42,33 @@ pub trait App: Sized {
 
     fn update(&self, base: &BaseApp<Self>, gui: &mut Self::Gui, image_index: usize) -> Result<()>;
 
-    fn record_command(
+    fn record_raytracing_commands(
         &self,
         base: &BaseApp<Self>,
         buffer: &VkCommandBuffer,
         image_index: usize,
-    ) -> Result<()>;
+    ) -> Result<()> {
+        // prevents reports of unused parameters without needing to use #[allow]
+        let _ = base;
+        let _ = buffer;
+        let _ = image_index;
+
+        Ok(())
+    }
+
+    fn record_raster_commands(
+        &self,
+        base: &BaseApp<Self>,
+        buffer: &VkCommandBuffer,
+        image_index: usize,
+    ) -> Result<()> {
+        // prevents reports of unused parameters without needing to use #[allow]
+        let _ = base;
+        let _ = buffer;
+        let _ = image_index;
+
+        Ok(())
+    }
 
     fn on_recreate_swapchain(&self, storage_images: &[ImageAndView]) -> Result<()>;
 }
@@ -64,11 +87,16 @@ impl Gui for () {
     fn build(&mut self, _ui: &Ui) {}
 }
 
-pub fn run<A: App + 'static>(app_name: &str, width: u32, height: u32) -> Result<()> {
+pub fn run<A: App + 'static>(
+    app_name: &str,
+    width: u32,
+    height: u32,
+    enable_raytracing: bool,
+) -> Result<()> {
     SimpleLogger::default().env().init()?;
 
     let (window, event_loop) = create_window(app_name, width, height);
-    let mut base_app = BaseApp::new(&window, app_name, width, height)?;
+    let mut base_app = BaseApp::new(&window, app_name, enable_raytracing)?;
     let mut ui = A::Gui::new()?;
     let app = A::new(&mut base_app)?;
     let mut gui_context = GuiContext::new(
@@ -149,32 +177,41 @@ fn create_window(app_name: &str, width: u32, height: u32) -> (Window, EventLoop<
 }
 
 impl<B: App> BaseApp<B> {
-    fn new(window: &Window, app_name: &str, width: u32, height: u32) -> Result<Self> {
+    fn new(window: &Window, app_name: &str, enable_raytracing: bool) -> Result<Self> {
         log::info!("Create application");
 
         // Vulkan context
-        let required_extensions = [
-            "VK_KHR_swapchain",
-            "VK_KHR_ray_tracing_pipeline",
-            "VK_KHR_acceleration_structure",
-            "VK_KHR_deferred_host_operations",
-        ];
-        let mut context =
-            VkContext::new(window, VULKAN_VERSION, Some(app_name), &required_extensions)?;
+        let required_extensions = ["VK_KHR_swapchain"];
+
+        let mut context = VkContext::new(
+            window,
+            VULKAN_VERSION,
+            Some(app_name),
+            &required_extensions,
+            enable_raytracing,
+        )?;
 
         let command_pool = context.create_command_pool(
             context.graphics_queue_family,
             Some(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER),
         )?;
 
-        let swapchain = VkSwapchain::new(&context, width, height)?;
-
-        let storage_images = create_storage_images(
-            &mut context,
-            swapchain.format,
-            swapchain.extent,
-            swapchain.images.len(),
+        let swapchain = VkSwapchain::new(
+            &context,
+            window.inner_size().width,
+            window.inner_size().height,
         )?;
+
+        let storage_images = if enable_raytracing {
+            create_storage_images(
+                &mut context,
+                swapchain.format,
+                swapchain.extent,
+                swapchain.images.len(),
+            )?
+        } else {
+            vec![]
+        };
 
         let command_buffers = create_command_buffers(&command_pool, &swapchain)?;
 
@@ -188,6 +225,7 @@ impl<B: App> BaseApp<B> {
             storage_images,
             command_buffers,
             in_flight_frames,
+            raytracing_enabled: enable_raytracing,
         })
     }
 
@@ -306,65 +344,77 @@ impl<B: App> BaseApp<B> {
     ) -> Result<()> {
         let swapchain_image = &self.swapchain.images[image_index];
         let swapchain_image_view = &self.swapchain.views[image_index];
-        let storage_image = &self.storage_images[image_index];
-
-        let storage_image = &storage_image.image;
 
         buffer.reset()?;
 
         buffer.begin(None)?;
 
-        base_app.record_command(self, buffer, image_index)?;
+        if self.raytracing_enabled {
+            base_app.record_raytracing_commands(self, buffer, image_index)?;
 
-        // Copy ray tracing result into swapchain
-        buffer.pipeline_image_barriers(&[
-            VkImageBarrier {
+            let storage_image = &self.storage_images[image_index].image;
+            // Copy ray tracing result into swapchain
+            buffer.pipeline_image_barriers(&[
+                VkImageBarrier {
+                    image: swapchain_image,
+                    old_layout: vk::ImageLayout::UNDEFINED,
+                    new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                    src_access_mask: vk::AccessFlags2::NONE,
+                    dst_access_mask: vk::AccessFlags2::TRANSFER_WRITE,
+                    src_stage_mask: vk::PipelineStageFlags2::NONE,
+                    dst_stage_mask: vk::PipelineStageFlags2::TRANSFER,
+                },
+                VkImageBarrier {
+                    image: storage_image,
+                    old_layout: vk::ImageLayout::GENERAL,
+                    new_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                    src_access_mask: vk::AccessFlags2::SHADER_WRITE,
+                    dst_access_mask: vk::AccessFlags2::TRANSFER_READ,
+                    src_stage_mask: vk::PipelineStageFlags2::RAY_TRACING_SHADER_KHR,
+                    dst_stage_mask: vk::PipelineStageFlags2::TRANSFER,
+                },
+            ]);
+
+            buffer.copy_image(
+                storage_image,
+                vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                swapchain_image,
+                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+            );
+
+            buffer.pipeline_image_barriers(&[
+                VkImageBarrier {
+                    image: swapchain_image,
+                    old_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                    new_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                    src_access_mask: vk::AccessFlags2::TRANSFER_WRITE,
+                    dst_access_mask: vk::AccessFlags2::COLOR_ATTACHMENT_WRITE,
+                    src_stage_mask: vk::PipelineStageFlags2::TRANSFER,
+                    dst_stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
+                },
+                VkImageBarrier {
+                    image: storage_image,
+                    old_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                    new_layout: vk::ImageLayout::GENERAL,
+                    src_access_mask: vk::AccessFlags2::TRANSFER_READ,
+                    dst_access_mask: vk::AccessFlags2::NONE,
+                    src_stage_mask: vk::PipelineStageFlags2::TRANSFER,
+                    dst_stage_mask: vk::PipelineStageFlags2::ALL_COMMANDS,
+                },
+            ]);
+        }
+
+        if !self.raytracing_enabled {
+            buffer.pipeline_image_barriers(&[VkImageBarrier {
                 image: swapchain_image,
                 old_layout: vk::ImageLayout::UNDEFINED,
-                new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                src_access_mask: vk::AccessFlags2::NONE,
-                dst_access_mask: vk::AccessFlags2::TRANSFER_WRITE,
-                src_stage_mask: vk::PipelineStageFlags2::NONE,
-                dst_stage_mask: vk::PipelineStageFlags2::TRANSFER,
-            },
-            VkImageBarrier {
-                image: storage_image,
-                old_layout: vk::ImageLayout::GENERAL,
-                new_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-                src_access_mask: vk::AccessFlags2::SHADER_WRITE,
-                dst_access_mask: vk::AccessFlags2::TRANSFER_READ,
-                src_stage_mask: vk::PipelineStageFlags2::RAY_TRACING_SHADER_KHR,
-                dst_stage_mask: vk::PipelineStageFlags2::TRANSFER,
-            },
-        ]);
-
-        buffer.copy_image(
-            storage_image,
-            vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-            swapchain_image,
-            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-        );
-
-        buffer.pipeline_image_barriers(&[
-            VkImageBarrier {
-                image: swapchain_image,
-                old_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                 new_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-                src_access_mask: vk::AccessFlags2::TRANSFER_WRITE,
+                src_access_mask: vk::AccessFlags2::NONE,
                 dst_access_mask: vk::AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                src_stage_mask: vk::PipelineStageFlags2::TRANSFER,
+                src_stage_mask: vk::PipelineStageFlags2::NONE,
                 dst_stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-            },
-            VkImageBarrier {
-                image: storage_image,
-                old_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-                new_layout: vk::ImageLayout::GENERAL,
-                src_access_mask: vk::AccessFlags2::TRANSFER_READ,
-                dst_access_mask: vk::AccessFlags2::NONE,
-                src_stage_mask: vk::PipelineStageFlags2::TRANSFER,
-                dst_stage_mask: vk::PipelineStageFlags2::ALL_COMMANDS,
-            },
-        ]);
+            }]);
+        }
 
         // Gui pass
         buffer.begin_rendering(swapchain_image_view, self.swapchain.extent);

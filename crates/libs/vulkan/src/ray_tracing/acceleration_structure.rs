@@ -49,8 +49,7 @@ impl VkAccelerationStructure {
             .size(build_size.acceleration_structure_size)
             .ty(level);
         let inner = unsafe {
-            context
-                .ray_tracing
+            ray_tracing
                 .acceleration_structure_fn
                 .create_acceleration_structure(&create_info, None)?
         };
@@ -79,8 +78,7 @@ impl VkAccelerationStructure {
         let address_info =
             vk::AccelerationStructureDeviceAddressInfoKHR::builder().acceleration_structure(inner);
         let address = unsafe {
-            context
-                .ray_tracing
+            ray_tracing
                 .acceleration_structure_fn
                 .get_acceleration_structure_device_address(&address_info)
         };
@@ -101,9 +99,13 @@ impl VkContext {
         as_ranges: &[vk::AccelerationStructureBuildRangeInfoKHR],
         max_primitive_counts: &[u32],
     ) -> Result<VkAccelerationStructure> {
+        let ray_tracing = self.ray_tracing.clone().expect(
+            "Cannot call VkContext::create_bottom_level_acceleration_structure when ray tracing is not enabled",
+        );
+
         VkAccelerationStructure::new(
             self,
-            self.ray_tracing.clone(),
+            ray_tracing,
             vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL,
             as_geometry,
             as_ranges,
@@ -117,9 +119,13 @@ impl VkContext {
         as_ranges: &[vk::AccelerationStructureBuildRangeInfoKHR],
         max_primitive_counts: &[u32],
     ) -> Result<VkAccelerationStructure> {
+        let ray_tracing = self.ray_tracing.clone().expect(
+            "Cannot call VkContext::create_top_level_acceleration_structure when ray tracing is not enabled",
+        );
+
         VkAccelerationStructure::new(
             self,
-            self.ray_tracing.clone(),
+            ray_tracing,
             vk::AccelerationStructureTypeKHR::TOP_LEVEL,
             as_geometry,
             as_ranges,

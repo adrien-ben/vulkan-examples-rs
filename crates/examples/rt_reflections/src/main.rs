@@ -1,17 +1,17 @@
 use app::anyhow::Result;
 use app::glam::{vec3, Mat4};
+use app::vulkan::ash::vk::{self, Packed24_8};
+use app::vulkan::gpu_allocator::MemoryLocation;
+use app::vulkan::utils::*;
+use app::vulkan::*;
 use app::{App, ImageAndView};
-use ash::vk::{self, Packed24_8};
 use gltf::Vertex;
-use gpu_allocator::MemoryLocation;
 use gui::imgui::{ColorPicker, Condition, Ui, Window};
 use std::mem::{size_of, size_of_val};
-use vulkan::utils::*;
-use vulkan::*;
 
 const WIDTH: u32 = 1920;
 const HEIGHT: u32 = 1080;
-const APP_NAME: &str = "Reflections";
+const APP_NAME: &str = "Ray traced reflections";
 
 const MODEL_PATH: &str = "./assets/models/reflections.glb";
 const EYE_POS: [f32; 3] = [-2.0, 1.5, 2.0];
@@ -19,7 +19,7 @@ const EYE_TARGET: [f32; 3] = [0.0, 1.0, 0.0];
 const MAX_DEPTH: u32 = 10;
 
 fn main() -> Result<()> {
-    app::run::<Reflections>(APP_NAME, WIDTH, HEIGHT)
+    app::run::<Reflections>(APP_NAME, WIDTH, HEIGHT, true)
 }
 
 struct Reflections {
@@ -120,7 +120,7 @@ impl App for Reflections {
         Ok(())
     }
 
-    fn record_command(
+    fn record_raytracing_commands(
         &self,
         base: &app::BaseApp<Self>,
         buffer: &VkCommandBuffer,
@@ -129,10 +129,7 @@ impl App for Reflections {
         let static_set = &self.descriptor_res.static_set;
         let dynamic_set = &self.descriptor_res.dynamic_sets[image_index];
 
-        buffer.bind_pipeline(
-            vk::PipelineBindPoint::RAY_TRACING_KHR,
-            &self.pipeline_res.pipeline,
-        );
+        buffer.bind_rt_pipeline(&self.pipeline_res.pipeline);
 
         buffer.bind_descriptor_sets(
             vk::PipelineBindPoint::RAY_TRACING_KHR,

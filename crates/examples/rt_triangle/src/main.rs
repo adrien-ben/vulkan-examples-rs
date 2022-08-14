@@ -1,16 +1,16 @@
 use app::anyhow::Result;
+use app::vulkan::ash::vk::{self, Packed24_8};
+use app::vulkan::utils::*;
+use app::vulkan::*;
 use app::{App, ImageAndView};
-use ash::vk::{self, Packed24_8};
 use std::mem::size_of;
-use vulkan::utils::*;
-use vulkan::*;
 
 const WIDTH: u32 = 1024;
 const HEIGHT: u32 = 576;
-const APP_NAME: &str = "Triangle advanced";
+const APP_NAME: &str = "Ray traced triangle";
 
 fn main() -> Result<()> {
-    app::run::<Triangle>(APP_NAME, WIDTH, HEIGHT)
+    app::run::<Triangle>(APP_NAME, WIDTH, HEIGHT, true)
 }
 
 struct Triangle {
@@ -55,7 +55,7 @@ impl App for Triangle {
         Ok(())
     }
 
-    fn record_command(
+    fn record_raytracing_commands(
         &self,
         base: &app::BaseApp<Self>,
         buffer: &VkCommandBuffer,
@@ -64,10 +64,7 @@ impl App for Triangle {
         let static_set = &self.descriptor_res.static_set;
         let dynamic_set = &self.descriptor_res.dynamic_sets[image_index];
 
-        buffer.bind_pipeline(
-            vk::PipelineBindPoint::RAY_TRACING_KHR,
-            &self.pipeline_res.pipeline,
-        );
+        buffer.bind_rt_pipeline(&self.pipeline_res.pipeline);
 
         buffer.bind_descriptor_sets(
             vk::PipelineBindPoint::RAY_TRACING_KHR,

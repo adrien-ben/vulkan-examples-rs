@@ -1,7 +1,9 @@
 mod acceleration_structure;
+mod pipeline;
 mod shader_binding_table;
 
 pub use acceleration_structure::*;
+pub use pipeline::*;
 pub use shader_binding_table::*;
 
 use ash::{

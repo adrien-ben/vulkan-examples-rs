@@ -10,14 +10,14 @@ use crate::{
 
 pub struct VkCommandPool {
     device: Arc<VkDevice>,
-    ray_tracing: Arc<VkRayTracingContext>,
+    ray_tracing: Option<Arc<VkRayTracingContext>>,
     pub inner: vk::CommandPool,
 }
 
 impl VkCommandPool {
     pub(crate) fn new(
         device: Arc<VkDevice>,
-        ray_tracing: Arc<VkRayTracingContext>,
+        ray_tracing: Option<Arc<VkRayTracingContext>>,
         queue_family: VkQueueFamily,
         flags: Option<vk::CommandPoolCreateFlags>,
     ) -> Result<Self> {
@@ -104,7 +104,7 @@ impl Drop for VkCommandPool {
 
 pub struct VkCommandBuffer {
     device: Arc<VkDevice>,
-    ray_tracing: Arc<VkRayTracingContext>,
+    ray_tracing: Option<Arc<VkRayTracingContext>>,
     pub inner: vk::CommandBuffer,
 }
 
@@ -137,11 +137,13 @@ impl VkCommandBuffer {
         Ok(())
     }
 
-    pub fn bind_pipeline(&self, bind_point: vk::PipelineBindPoint, pipeline: &VkRTPipeline) {
+    pub fn bind_rt_pipeline(&self, pipeline: &VkRTPipeline) {
         unsafe {
-            self.device
-                .inner
-                .cmd_bind_pipeline(self.inner, bind_point, pipeline.inner)
+            self.device.inner.cmd_bind_pipeline(
+                self.inner,
+                vk::PipelineBindPoint::RAY_TRACING_KHR,
+                pipeline.inner,
+            )
         }
     }
 
@@ -273,8 +275,12 @@ impl VkCommandBuffer {
         as_build_geo_info: &vk::AccelerationStructureBuildGeometryInfoKHR,
         as_build_range_info: &[vk::AccelerationStructureBuildRangeInfoKHR],
     ) {
+        let ray_tracing = self.ray_tracing.as_ref().expect(
+            "Cannot call VkCommandBuffer::build_acceleration_structures when ray tracing is not enabled",
+        );
+
         unsafe {
-            self.ray_tracing
+            ray_tracing
                 .acceleration_structure_fn
                 .cmd_build_acceleration_structures(
                     self.inner,
@@ -285,14 +291,18 @@ impl VkCommandBuffer {
     }
 
     pub fn trace_rays(&self, shader_binding_table: &VkShaderBindingTable, width: u32, height: u32) {
-        let empty_region = vk::StridedDeviceAddressRegionKHR::builder();
+        let ray_tracing = self
+            .ray_tracing
+            .as_ref()
+            .expect("Cannot call VkCommandBuffer::trace_rays when ray tracing is not enabled");
+
         unsafe {
-            self.ray_tracing.pipeline_fn.cmd_trace_rays(
+            ray_tracing.pipeline_fn.cmd_trace_rays(
                 self.inner,
                 &shader_binding_table.raygen_region,
                 &shader_binding_table.miss_region,
                 &shader_binding_table.hit_region,
-                &empty_region,
+                &vk::StridedDeviceAddressRegionKHR::builder(),
                 width,
                 height,
                 1,

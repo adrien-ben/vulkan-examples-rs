@@ -7,6 +7,5 @@ edition = "2021"
 
 [dependencies]
 app = { path = "../../libs/app" }
-vulkan = { path = "../../libs/vulkan" }
 gltf = { path = "../../libs/gltf" }
 gui = { path = "../../libs/gui" }

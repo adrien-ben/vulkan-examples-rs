@@ -2,7 +2,7 @@ use anyhow::Result;
 use ash::vk;
 use gpu_allocator::MemoryLocation;
 
-use crate::{utils::compute_aligned_size, VkBuffer, VkContext, VkRTPipeline};
+use crate::{utils::compute_aligned_size, VkBuffer, VkContext, VkRTPipeline, VkRayTracingContext};
 
 pub struct VkShaderBindingTable {
     _buffer: VkBuffer,
@@ -12,8 +12,11 @@ pub struct VkShaderBindingTable {
 }
 
 impl VkShaderBindingTable {
-    pub(crate) fn new(context: &VkContext, pipeline: &VkRTPipeline) -> Result<Self> {
-        let ray_tracing = &context.ray_tracing;
+    pub(crate) fn new(
+        context: &VkContext,
+        ray_tracing: &VkRayTracingContext,
+        pipeline: &VkRTPipeline,
+    ) -> Result<Self> {
         let desc = pipeline.shader_group_info;
 
         // Handle size & aligment
@@ -118,14 +121,12 @@ impl VkShaderBindingTable {
             .stride(aligned_handle_size as _)
             .build();
 
-        let sbt = Self {
+        Ok(Self {
             _buffer: buffer,
             raygen_region,
             miss_region,
             hit_region,
-        };
-
-        Ok(sbt)
+        })
     }
 }
 
@@ -134,6 +135,10 @@ impl VkContext {
         &self,
         pipeline: &VkRTPipeline,
     ) -> Result<VkShaderBindingTable> {
-        VkShaderBindingTable::new(self, pipeline)
+        let ray_tracing = self.ray_tracing.as_ref().expect(
+            "Cannot call VkContext::create_shader_binding_table when ray tracing is not enabled",
+        );
+
+        VkShaderBindingTable::new(self, ray_tracing, pipeline)
     }
 }

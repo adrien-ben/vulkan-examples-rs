@@ -20,7 +20,7 @@ use crate::{
 pub struct VkContext {
     pub allocator: Arc<Mutex<Allocator>>,
     pub command_pool: VkCommandPool,
-    pub ray_tracing: Arc<VkRayTracingContext>,
+    pub ray_tracing: Option<Arc<VkRayTracingContext>>,
     pub graphics_queue: VkQueue,
     pub present_queue: VkQueue,
     pub device: Arc<VkDevice>,
@@ -38,6 +38,7 @@ impl VkContext {
         api_version: VkVersion,
         app_name: Option<&str>,
         required_extensions: &[&str],
+        enable_raytracing: bool,
     ) -> Result<Self> {
         // Vulkan instance
         let entry = Entry::linked();
@@ -46,9 +47,20 @@ impl VkContext {
         // Vulkan surface
         let surface = VkSurface::new(&entry, &instance, &window)?;
 
+        let mut required_extensions = Vec::from(required_extensions);
+        if enable_raytracing {
+            required_extensions.push("VK_KHR_ray_tracing_pipeline");
+            required_extensions.push("VK_KHR_acceleration_structure");
+            required_extensions.push("VK_KHR_deferred_host_operations");
+        }
+
         let physical_devices = instance.enumerate_physical_devices(&surface)?;
         let (physical_device, graphics_queue_family, present_queue_family) =
-            select_suitable_physical_device(physical_devices, required_extensions)?;
+            select_suitable_physical_device(
+                physical_devices,
+                &required_extensions,
+                enable_raytracing,
+            )?;
         log::info!("Selected physical device: {:?}", physical_device.name);
 
         let queue_families = [graphics_queue_family, present_queue_family];
@@ -56,28 +68,34 @@ impl VkContext {
             &instance,
             &physical_device,
             &queue_families,
-            required_extensions,
+            &required_extensions,
         )?);
         let graphics_queue = device.get_queue(graphics_queue_family, 0);
         let present_queue = device.get_queue(present_queue_family, 0);
 
-        let rt_context = Arc::new(VkRayTracingContext::new(
-            &instance,
-            &physical_device,
-            &device,
-        ));
-        log::debug!(
-            "Ray tracing pipeline properties {:#?}",
-            rt_context.pipeline_properties
-        );
-        log::debug!(
-            "Acceleration structure properties {:#?}",
-            rt_context.acceleration_structure_properties
-        );
+        let ray_tracing = if enable_raytracing {
+            let ray_tracing = Arc::new(VkRayTracingContext::new(
+                &instance,
+                &physical_device,
+                &device,
+            ));
+            log::debug!(
+                "Ray tracing pipeline properties {:#?}",
+                ray_tracing.pipeline_properties
+            );
+            log::debug!(
+                "Acceleration structure properties {:#?}",
+                ray_tracing.acceleration_structure_properties
+            );
+
+            Some(ray_tracing)
+        } else {
+            None
+        };
 
         let command_pool = VkCommandPool::new(
             device.clone(),
-            rt_context.clone(),
+            ray_tracing.clone(),
             graphics_queue_family,
             Some(vk::CommandPoolCreateFlags::TRANSIENT),
         )?;
@@ -98,7 +116,7 @@ impl VkContext {
         Ok(Self {
             allocator: Arc::new(Mutex::new(allocator)),
             command_pool,
-            ray_tracing: rt_context,
+            ray_tracing,
             present_queue,
             graphics_queue,
             device,
@@ -115,6 +133,7 @@ impl VkContext {
 fn select_suitable_physical_device(
     devices: &[VkPhysicalDevice],
     required_extensions: &[&str],
+    enable_raytracing: bool,
 ) -> Result<(VkPhysicalDevice, VkQueueFamily, VkQueueFamily)> {
     log::debug!("Choosing Vulkan physical device");
 
@@ -147,6 +166,7 @@ fn select_suitable_physical_device(
                 && extention_support
                 && !device.supported_surface_formats.is_empty()
                 && !device.supported_present_modes.is_empty()
+                && (device.supports_ray_tracing || !enable_raytracing)
                 && device.supports_dynamic_rendering
                 && device.supports_synchronization2
         })

@@ -1007,7 +1007,6 @@ dependencies = [
  "app",
  "gltf 0.1.0",
  "gui",
- "vulkan",
 ]
 
 [[package]]
@@ -1017,7 +1016,6 @@ dependencies = [
  "app",
  "gltf 0.1.0",
  "gui",
- "vulkan",
 ]
 
 [[package]]
@@ -1025,7 +1023,6 @@ name = "rt_triangle"
 version = "0.1.0"
 dependencies = [
  "app",
- "vulkan",
 ]
 
 [[package]]
