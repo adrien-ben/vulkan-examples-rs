@@ -1,0 +1,167 @@
+use std::sync::{Arc, Mutex};
+
+use anyhow::Result;
+use ash::vk;
+use gpu_allocator::{
+    vulkan::{Allocation, AllocationCreateDesc, Allocator},
+    MemoryLocation,
+};
+
+use crate::{device::VkDevice, VkContext};
+
+pub struct VkImage {
+    device: Arc<VkDevice>,
+    allocator: Arc<Mutex<Allocator>>,
+    pub(crate) inner: vk::Image,
+    allocation: Option<Allocation>,
+    pub format: vk::Format,
+    pub extent: vk::Extent3D,
+    is_swapchain: bool, // if set, image should not be destroyed
+}
+
+pub struct VkImageView {
+    device: Arc<VkDevice>,
+    pub(crate) inner: vk::ImageView,
+}
+
+impl VkImage {
+    pub(crate) fn new_2d(
+        device: Arc<VkDevice>,
+        allocator: Arc<Mutex<Allocator>>,
+        usage: vk::ImageUsageFlags,
+        memory_location: MemoryLocation,
+        format: vk::Format,
+        width: u32,
+        height: u32,
+    ) -> Result<Self> {
+        let extent = vk::Extent3D {
+            width,
+            height,
+            depth: 1,
+        };
+
+        let image_info = vk::ImageCreateInfo::builder()
+            .image_type(vk::ImageType::TYPE_2D)
+            .format(format)
+            .extent(extent)
+            .mip_levels(1)
+            .array_layers(1)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            .usage(usage)
+            .initial_layout(vk::ImageLayout::UNDEFINED);
+
+        let inner = unsafe { device.inner.create_image(&image_info, None)? };
+        let requirements = unsafe { device.inner.get_image_memory_requirements(inner) };
+
+        let allocation = allocator.lock().unwrap().allocate(&AllocationCreateDesc {
+            name: "image",
+            requirements,
+            location: memory_location,
+            linear: true,
+        })?;
+
+        unsafe {
+            device
+                .inner
+                .bind_image_memory(inner, allocation.memory(), allocation.offset())?
+        };
+
+        Ok(Self {
+            device,
+            allocator,
+            inner,
+            allocation: Some(allocation),
+            format,
+            extent,
+            is_swapchain: false,
+        })
+    }
+
+    pub(crate) fn from_swapchain_image(
+        device: Arc<VkDevice>,
+        allocator: Arc<Mutex<Allocator>>,
+        swapchain_image: vk::Image,
+        format: vk::Format,
+        extent: vk::Extent2D,
+    ) -> Self {
+        let extent = vk::Extent3D {
+            width: extent.width,
+            height: extent.height,
+            depth: 1,
+        };
+
+        Self {
+            device,
+            allocator,
+            inner: swapchain_image,
+            allocation: None,
+            format,
+            extent,
+            is_swapchain: true,
+        }
+    }
+
+    pub fn create_image_view(&self) -> Result<VkImageView> {
+        let view_info = vk::ImageViewCreateInfo::builder()
+            .image(self.inner)
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(self.format)
+            .subresource_range(vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            });
+
+        let inner = unsafe { self.device.inner.create_image_view(&view_info, None)? };
+
+        Ok(VkImageView {
+            device: self.device.clone(),
+            inner,
+        })
+    }
+}
+
+impl VkContext {
+    pub fn create_image(
+        &self,
+        usage: vk::ImageUsageFlags,
+        memory_location: MemoryLocation,
+        format: vk::Format,
+        width: u32,
+        height: u32,
+    ) -> Result<VkImage> {
+        VkImage::new_2d(
+            self.device.clone(),
+            self.allocator.clone(),
+            usage,
+            memory_location,
+            format,
+            width,
+            height,
+        )
+    }
+}
+
+impl Drop for VkImage {
+    fn drop(&mut self) {
+        if self.is_swapchain {
+            return;
+        }
+
+        unsafe { self.device.inner.destroy_image(self.inner, None) };
+        self.allocator
+            .lock()
+            .unwrap()
+            .free(self.allocation.take().unwrap())
+            .unwrap();
+    }
+}
+
+impl Drop for VkImageView {
+    fn drop(&mut self) {
+        unsafe { self.device.inner.destroy_image_view(self.inner, None) };
+    }
+}

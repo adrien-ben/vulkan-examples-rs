@@ -1,0 +1,10 @@
+[workspace]
+members = [
+    "crates/examples/rt_triangle",
+    "crates/examples/rt_shadows",
+    "crates/examples/rt_reflections",
+    "crates/libs/app",
+    "crates/libs/gltf",
+    "crates/libs/gui",
+    "crates/libs/vulkan",
+]
