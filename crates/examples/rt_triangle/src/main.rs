@@ -82,18 +82,21 @@ impl App for Triangle {
         Ok(())
     }
 
-    fn on_recreate_swapchain(&self, storage_images: &[app::ImageAndView]) -> Result<()> {
-        storage_images.iter().enumerate().for_each(|(index, img)| {
-            let set = &self.descriptor_res.dynamic_sets[index];
+    fn on_recreate_swapchain(&mut self, base: &app::BaseApp<Self>) -> Result<()> {
+        base.storage_images
+            .iter()
+            .enumerate()
+            .for_each(|(index, img)| {
+                let set = &self.descriptor_res.dynamic_sets[index];
 
-            set.update(&[VkWriteDescriptorSet {
-                binding: 1,
-                kind: VkWriteDescriptorSetKind::StorageImage {
-                    layout: vk::ImageLayout::GENERAL,
-                    view: &img.view,
-                },
-            }]);
-        });
+                set.update(&[VkWriteDescriptorSet {
+                    binding: 1,
+                    kind: VkWriteDescriptorSetKind::StorageImage {
+                        layout: vk::ImageLayout::GENERAL,
+                        view: &img.view,
+                    },
+                }]);
+            });
 
         Ok(())
     }
@@ -305,7 +308,7 @@ fn create_pipeline(context: &VkContext) -> Result<PipelineRes> {
         max_ray_recursion_depth: 1,
     };
 
-    let pipeline = context.create_ray_tracing_pipeline(&pipeline_layout, &pipeline_create_info)?;
+    let pipeline = context.create_ray_tracing_pipeline(&pipeline_layout, pipeline_create_info)?;
 
     Ok(PipelineRes {
         pipeline,

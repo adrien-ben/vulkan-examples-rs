@@ -71,10 +71,16 @@ impl VkInstance {
         if self.physical_devices.is_empty() {
             let physical_devices = unsafe { self.inner.enumerate_physical_devices()? };
 
-            let physical_devices = physical_devices
+            let mut physical_devices = physical_devices
                 .into_iter()
                 .map(|pd| VkPhysicalDevice::new(&self.inner, surface, pd))
-                .collect::<Result<_>>()?;
+                .collect::<Result<Vec<_>>>()?;
+
+            physical_devices.sort_by_key(|pd| match pd.device_type {
+                vk::PhysicalDeviceType::DISCRETE_GPU => 0,
+                vk::PhysicalDeviceType::INTEGRATED_GPU => 1,
+                _ => 2,
+            });
 
             self.physical_devices = physical_devices;
         }

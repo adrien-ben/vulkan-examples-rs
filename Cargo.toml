@@ -3,6 +3,7 @@ members = [
     "crates/examples/rt_triangle",
     "crates/examples/rt_shadows",
     "crates/examples/rt_reflections",
+    "crates/examples/triangle",
     "crates/libs/app",
     "crates/libs/gltf",
     "crates/libs/gui",

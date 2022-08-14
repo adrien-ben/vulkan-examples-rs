@@ -69,6 +69,7 @@ impl VkContext {
             &physical_device,
             &queue_families,
             &required_extensions,
+            enable_raytracing,
         )?);
         let graphics_queue = device.get_queue(graphics_queue_family, 0);
         let present_queue = device.get_queue(present_queue_family, 0);

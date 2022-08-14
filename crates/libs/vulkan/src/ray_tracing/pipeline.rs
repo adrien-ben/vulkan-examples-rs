@@ -7,11 +7,13 @@ use crate::{device::VkDevice, VkContext};
 
 use crate::{VkPipelineLayout, VkRayTracingContext, VkShaderModule};
 
+#[derive(Debug, Clone, Copy)]
 pub struct VkRTPipelineCreateInfo<'a> {
     pub shaders: &'a [VkRTShaderCreateInfo<'a>],
     pub max_ray_recursion_depth: u32,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct VkRTShaderCreateInfo<'a> {
     pub source: &'a [u8],
     pub stage: vk::ShaderStageFlags,
@@ -44,7 +46,7 @@ impl VkRTPipeline {
         device: Arc<VkDevice>,
         ray_tracing: &VkRayTracingContext,
         layout: &VkPipelineLayout,
-        create_info: &VkRTPipelineCreateInfo,
+        create_info: VkRTPipelineCreateInfo,
     ) -> Result<Self> {
         let mut shader_group_info = VkRTShaderGroupInfo {
             group_count: create_info.shaders.len() as _,
@@ -119,7 +121,7 @@ impl VkContext {
     pub fn create_ray_tracing_pipeline(
         &self,
         layout: &VkPipelineLayout,
-        create_info: &VkRTPipelineCreateInfo,
+        create_info: VkRTPipelineCreateInfo,
     ) -> Result<VkRTPipeline> {
         let ray_tracing = self.ray_tracing.as_ref().expect(
             "Cannot call VkContext::create_ray_tracing_pipeline when ray tracing is not enabled",

@@ -19,6 +19,7 @@ impl VkDevice {
         physical_device: &VkPhysicalDevice,
         queue_families: &[VkQueueFamily],
         required_extensions: &[&str],
+        enable_ray_tracing: bool,
     ) -> Result<Self> {
         let queue_priorities = [1.0f32];
 
@@ -46,14 +47,14 @@ impl VkDevice {
             .map(|e| e.as_ptr())
             .collect::<Vec<_>>();
 
-        let mut ray_tracing_feature =
-            vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::builder().ray_tracing_pipeline(true);
+        let mut ray_tracing_feature = vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::builder()
+            .ray_tracing_pipeline(enable_ray_tracing);
         let mut acceleration_struct_feature =
             vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder()
-                .acceleration_structure(true);
+                .acceleration_structure(enable_ray_tracing);
         let mut vulkan_12_features = vk::PhysicalDeviceVulkan12Features::builder()
-            .runtime_descriptor_array(true)
-            .buffer_device_address(true);
+            .runtime_descriptor_array(enable_ray_tracing)
+            .buffer_device_address(enable_ray_tracing);
         let mut vulkan_13_features = vk::PhysicalDeviceVulkan13Features::builder()
             .dynamic_rendering(true)
             .synchronization2(true);

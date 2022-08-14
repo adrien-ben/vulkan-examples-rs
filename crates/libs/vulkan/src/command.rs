@@ -4,8 +4,9 @@ use anyhow::Result;
 use ash::vk;
 
 use crate::{
-    device::VkDevice, VkBuffer, VkContext, VkDescriptorSet, VkImage, VkImageView, VkPipelineLayout,
-    VkQueueFamily, VkRTPipeline, VkRayTracingContext, VkShaderBindingTable,
+    device::VkDevice, VkBuffer, VkContext, VkDescriptorSet, VkGraphicsPipeline, VkImage,
+    VkImageView, VkPipelineLayout, VkQueueFamily, VkRTPipeline, VkRayTracingContext,
+    VkShaderBindingTable,
 };
 
 pub struct VkCommandPool {
@@ -145,6 +146,32 @@ impl VkCommandBuffer {
                 pipeline.inner,
             )
         }
+    }
+
+    pub fn bind_graphics_pipeline(&self, pipeline: &VkGraphicsPipeline) {
+        unsafe {
+            self.device.inner.cmd_bind_pipeline(
+                self.inner,
+                vk::PipelineBindPoint::GRAPHICS,
+                pipeline.inner,
+            )
+        }
+    }
+
+    pub fn bind_vertex_buffer(&self, vertex_buffer: &VkBuffer) {
+        unsafe {
+            self.device
+                .inner
+                .cmd_bind_vertex_buffers(self.inner, 0, &[vertex_buffer.inner], &[0])
+        };
+    }
+
+    pub fn draw(&self, vertex_count: u32) {
+        unsafe {
+            self.device
+                .inner
+                .cmd_draw(self.inner, vertex_count, 1, 0, 0)
+        };
     }
 
     pub fn bind_descriptor_sets(

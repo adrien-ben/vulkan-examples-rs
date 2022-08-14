@@ -70,7 +70,7 @@ pub trait App: Sized {
         Ok(())
     }
 
-    fn on_recreate_swapchain(&self, storage_images: &[ImageAndView]) -> Result<()>;
+    fn on_recreate_swapchain(&mut self, base: &BaseApp<Self>) -> Result<()>;
 }
 
 pub trait Gui: Sized {
@@ -98,7 +98,7 @@ pub fn run<A: App + 'static>(
     let (window, event_loop) = create_window(app_name, width, height);
     let mut base_app = BaseApp::new(&window, app_name, enable_raytracing)?;
     let mut ui = A::Gui::new()?;
-    let app = A::new(&mut base_app)?;
+    let mut app = A::new(&mut base_app)?;
     let mut gui_context = GuiContext::new(
         &base_app.context,
         &base_app.context.command_pool,
@@ -112,7 +112,7 @@ pub fn run<A: App + 'static>(
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
-        let app = &app; // Make sure it is dropped before base_app
+        let app = &mut app; // Make sure it is dropped before base_app
 
         gui_context.handle_event(&window, &event);
 
@@ -138,7 +138,7 @@ pub fn run<A: App + 'static>(
                         base_app
                             .recreate_swapchain(dim.width, dim.height)
                             .expect("Failed to recreate swapchain");
-                        app.on_recreate_swapchain(base_app.storage_images.as_slice())
+                        app.on_recreate_swapchain(&base_app)
                             .expect("Error on recreate swapchain callback");
                     } else {
                         return;
@@ -418,6 +418,8 @@ impl<B: App> BaseApp<B> {
 
         // Gui pass
         buffer.begin_rendering(swapchain_image_view, self.swapchain.extent);
+
+        base_app.record_raster_commands(self, buffer, image_index)?;
 
         gui_renderer.cmd_draw(buffer.inner, draw_data)?;
 

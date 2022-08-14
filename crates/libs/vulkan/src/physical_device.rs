@@ -9,6 +9,7 @@ use crate::{queue::VkQueueFamily, surface::VkSurface};
 pub struct VkPhysicalDevice {
     pub(crate) inner: vk::PhysicalDevice,
     pub(crate) name: String,
+    pub(crate) device_type: vk::PhysicalDeviceType,
     pub(crate) queue_families: Vec<VkQueueFamily>,
     pub(crate) supported_extensions: Vec<String>,
     pub(crate) supported_surface_formats: Vec<vk::SurfaceFormatKHR>,
@@ -24,13 +25,16 @@ impl VkPhysicalDevice {
         surface: &VkSurface,
         inner: vk::PhysicalDevice,
     ) -> Result<Self> {
+        let props = unsafe { instance.get_physical_device_properties(inner) };
+
         let name = unsafe {
-            let props = instance.get_physical_device_properties(inner);
             CStr::from_ptr(props.device_name.as_ptr())
                 .to_str()
                 .unwrap()
                 .to_owned()
         };
+
+        let device_type = props.device_type;
 
         let queue_family_properties =
             unsafe { instance.get_physical_device_queue_family_properties(inner) };
@@ -95,6 +99,7 @@ impl VkPhysicalDevice {
         Ok(Self {
             inner,
             name,
+            device_type,
             queue_families,
             supported_extensions,
             supported_surface_formats,
