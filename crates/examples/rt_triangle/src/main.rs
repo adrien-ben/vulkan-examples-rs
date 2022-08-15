@@ -4,6 +4,7 @@ use app::vulkan::utils::*;
 use app::vulkan::*;
 use app::{App, ImageAndView};
 use std::mem::size_of;
+use std::time::Duration;
 
 const WIDTH: u32 = 1024;
 const HEIGHT: u32 = 576;
@@ -51,7 +52,13 @@ impl App for Triangle {
         })
     }
 
-    fn update(&self, _: &app::BaseApp<Self>, _: &mut <Self as App>::Gui, _: usize) -> Result<()> {
+    fn update(
+        &mut self,
+        _: &app::BaseApp<Self>,
+        _: &mut <Self as App>::Gui,
+        _: usize,
+        _: Duration,
+    ) -> Result<()> {
         Ok(())
     }
 

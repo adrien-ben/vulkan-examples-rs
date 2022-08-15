@@ -1,0 +1,48 @@
+#version 450
+
+struct Particle {
+  vec3 position;
+  vec4 direction;
+  vec3 color;
+};
+
+// Binding 0 : Position storage buffer
+layout(std430, binding = 0) buffer Buffer {
+   Particle particles[];
+};
+
+layout(binding = 1) uniform Config {
+  uint particleCount;
+  float elasped;
+} cfg;
+
+layout (local_size_x = 256) in;
+
+void main() {
+    // Current SSBO index
+    uint index = gl_GlobalInvocationID.x;
+
+    // Don't try to write beyond particle count
+    if (index >= cfg.particleCount) {
+      return;
+    }
+
+    // Read particle attribute
+    vec3 position = particles[index].position;
+    vec3 direction = normalize(particles[index].direction.xyz);
+    float speed = particles[index].direction.w;
+
+    // Move by velocity
+    position += direction * cfg.elasped * speed;
+
+    // Reset if out of bounds
+    if (position.x > 1.0 || position.x < -1.0 
+        || position.y > 1.0 || position.y < -1.0 
+        || position.z > 1.0 || position.z < -1.0) {
+
+      position = vec3(0.0);
+    }
+
+    // Write back
+    particles[index].position = position;
+}

@@ -8,9 +8,11 @@ Collection of Vulkan examples that I make to learn stuff in Rust using [ash][ash
 
 You can run one of the following example.
 
-- rt_triangle: Ray-traced triangle with a Vulan setup a bit more involved and using some abstractions.
+- rt_triangle: Ray-traced triangle.
 - rt_shadows: Ray-traced gltf model with simulated sunlight shadow. It has one BLAS with multiple geometries. Light and camera controls with imgui.
 - rt_reflections: Ray-traced iterative (not recursive) reflections.
+- triangle: Rasterized triangle.
+- gpu_particles: Particles simulated on the gpu using a compute shader.
 
 ```ps1
 # Powershell example (all scripts have a .sh version)

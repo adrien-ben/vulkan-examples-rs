@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use app::anyhow::Result;
 use app::vulkan::ash::vk;
 use app::vulkan::utils::create_gpu_only_buffer_from_data;
@@ -55,19 +57,31 @@ impl App for Triangle {
         Ok(())
     }
 
-    fn update(&self, _: &app::BaseApp<Self>, _: &mut <Self as App>::Gui, _: usize) -> Result<()> {
+    fn update(
+        &mut self,
+        _: &app::BaseApp<Self>,
+        _: &mut <Self as App>::Gui,
+        _: usize,
+        _: Duration,
+    ) -> Result<()> {
         Ok(())
     }
 
     fn record_raster_commands(
         &self,
-        _: &app::BaseApp<Self>,
+        base: &app::BaseApp<Self>,
         buffer: &app::vulkan::VkCommandBuffer,
-        _: usize,
+        image_index: usize,
     ) -> Result<()> {
+        buffer.begin_rendering(
+            &base.swapchain.views[image_index],
+            base.swapchain.extent,
+            vk::AttachmentLoadOp::CLEAR,
+        );
         buffer.bind_graphics_pipeline(&self.pipeline);
         buffer.bind_vertex_buffer(&self.vertex_buffer);
         buffer.draw(3);
+        buffer.end_rendering();
 
         Ok(())
     }

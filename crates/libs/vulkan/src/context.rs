@@ -111,7 +111,7 @@ impl VkContext {
                 log_frees: true,
                 ..Default::default()
             },
-            buffer_device_address: true,
+            buffer_device_address: enable_raytracing,
         })?;
 
         Ok(Self {

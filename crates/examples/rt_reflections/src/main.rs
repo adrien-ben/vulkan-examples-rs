@@ -8,6 +8,7 @@ use app::{App, ImageAndView};
 use gltf::Vertex;
 use gui::imgui::{ColorPicker, Condition, Ui, Window};
 use std::mem::{size_of, size_of_val};
+use std::time::Duration;
 
 const WIDTH: u32 = 1920;
 const HEIGHT: u32 = 1080;
@@ -76,10 +77,11 @@ impl App for Reflections {
     }
 
     fn update(
-        &self,
+        &mut self,
         base: &app::BaseApp<Self>,
         gui: &mut <Self as App>::Gui,
         _image_index: usize,
+        _: Duration,
     ) -> Result<()> {
         let view = Mat4::look_at_rh(
             gui.camera.position.into(),

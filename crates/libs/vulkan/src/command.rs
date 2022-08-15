@@ -4,8 +4,8 @@ use anyhow::Result;
 use ash::vk;
 
 use crate::{
-    device::VkDevice, VkBuffer, VkContext, VkDescriptorSet, VkGraphicsPipeline, VkImage,
-    VkImageView, VkPipelineLayout, VkQueueFamily, VkRTPipeline, VkRayTracingContext,
+    device::VkDevice, VkBuffer, VkComputePipeline, VkContext, VkDescriptorSet, VkGraphicsPipeline,
+    VkImage, VkImageView, VkPipelineLayout, VkQueueFamily, VkRTPipeline, VkRayTracingContext,
     VkShaderBindingTable,
 };
 
@@ -158,6 +158,16 @@ impl VkCommandBuffer {
         }
     }
 
+    pub fn bind_compute_pipeline(&self, pipeline: &VkComputePipeline) {
+        unsafe {
+            self.device.inner.cmd_bind_pipeline(
+                self.inner,
+                vk::PipelineBindPoint::COMPUTE,
+                pipeline.inner,
+            )
+        }
+    }
+
     pub fn bind_vertex_buffer(&self, vertex_buffer: &VkBuffer) {
         unsafe {
             self.device
@@ -172,6 +182,14 @@ impl VkCommandBuffer {
                 .inner
                 .cmd_draw(self.inner, vertex_count, 1, 0, 0)
         };
+    }
+
+    pub fn dispatch(&self, group_count_x: u32, group_count_y: u32, group_count_z: u32) {
+        unsafe {
+            self.device
+                .inner
+                .cmd_dispatch(self.inner, group_count_x, group_count_y, group_count_z);
+        }
     }
 
     pub fn bind_descriptor_sets(
@@ -192,6 +210,31 @@ impl VkCommandBuffer {
                 &[],
             )
         }
+    }
+
+    pub fn pipeline_buffer_barriers(&self, barriers: &[VkBufferBarrier]) {
+        let barriers = barriers
+            .iter()
+            .map(|b| {
+                vk::BufferMemoryBarrier2::builder()
+                    .src_stage_mask(b.src_stage_mask)
+                    .src_access_mask(b.src_access_mask)
+                    .dst_stage_mask(b.dst_stage_mask)
+                    .dst_access_mask(b.dst_access_mask)
+                    .buffer(b.buffer.inner)
+                    .offset(0)
+                    .size(vk::WHOLE_SIZE)
+                    .build()
+            })
+            .collect::<Vec<_>>();
+
+        let dependency_info = vk::DependencyInfo::builder().buffer_memory_barriers(&barriers);
+
+        unsafe {
+            self.device
+                .inner
+                .cmd_pipeline_barrier2(self.inner, &dependency_info)
+        };
     }
 
     pub fn copy_buffer(&self, src_buffer: &VkBuffer, dst_buffer: &VkBuffer) {
@@ -337,11 +380,16 @@ impl VkCommandBuffer {
         };
     }
 
-    pub fn begin_rendering(&self, image_view: &VkImageView, extent: vk::Extent2D) {
+    pub fn begin_rendering(
+        &self,
+        image_view: &VkImageView,
+        extent: vk::Extent2D,
+        load_op: vk::AttachmentLoadOp,
+    ) {
         let color_attachment_info = vk::RenderingAttachmentInfo::builder()
             .image_view(image_view.inner)
             .image_layout(vk::ImageLayout::ATTACHMENT_OPTIMAL)
-            .load_op(vk::AttachmentLoadOp::DONT_CARE)
+            .load_op(load_op)
             .store_op(vk::AttachmentStoreOp::STORE)
             .clear_value(vk::ClearValue {
                 color: vk::ClearColorValue {
@@ -367,6 +415,15 @@ impl VkCommandBuffer {
     pub fn end_rendering(&self) {
         unsafe { self.device.inner.cmd_end_rendering(self.inner) };
     }
+}
+
+#[derive(Clone, Copy)]
+pub struct VkBufferBarrier<'a> {
+    pub buffer: &'a VkBuffer,
+    pub src_access_mask: vk::AccessFlags2,
+    pub dst_access_mask: vk::AccessFlags2,
+    pub src_stage_mask: vk::PipelineStageFlags2,
+    pub dst_stage_mask: vk::PipelineStageFlags2,
 }
 
 #[derive(Clone, Copy)]

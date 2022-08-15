@@ -12,7 +12,10 @@ use gui::{
     GuiContext,
 };
 use simple_logger::SimpleLogger;
-use std::{marker::PhantomData, time::Instant};
+use std::{
+    marker::PhantomData,
+    time::{Duration, Instant},
+};
 use vulkan::*;
 use winit::{
     dpi::PhysicalSize,
@@ -40,7 +43,13 @@ pub trait App: Sized {
 
     fn new(base: &mut BaseApp<Self>) -> Result<Self>;
 
-    fn update(&self, base: &BaseApp<Self>, gui: &mut Self::Gui, image_index: usize) -> Result<()>;
+    fn update(
+        &mut self,
+        base: &BaseApp<Self>,
+        gui: &mut Self::Gui,
+        image_index: usize,
+        delta_time: Duration,
+    ) -> Result<()>;
 
     fn record_raytracing_commands(
         &self,
@@ -108,6 +117,7 @@ pub fn run<A: App + 'static>(
     )?;
     let mut is_swapchain_dirty = false;
     let mut last_frame = Instant::now();
+    let mut delta_time = Duration::ZERO;
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -119,7 +129,8 @@ pub fn run<A: App + 'static>(
         match event {
             Event::NewEvents(_) => {
                 let now = Instant::now();
-                gui_context.update_delta_time(now - last_frame);
+                delta_time = now - last_frame;
+                gui_context.update_delta_time(delta_time);
                 last_frame = now;
             }
             // On resize
@@ -146,7 +157,7 @@ pub fn run<A: App + 'static>(
                 }
 
                 is_swapchain_dirty = base_app
-                    .draw(&window, app, &mut gui_context, &mut ui)
+                    .draw(&window, app, &mut gui_context, &mut ui, delta_time)
                     .expect("Failed to tick");
             }
             // Exit app on request to close window
@@ -257,9 +268,10 @@ impl<B: App> BaseApp<B> {
     fn draw(
         &mut self,
         window: &Window,
-        base_app: &B,
+        base_app: &mut B,
         gui_context: &mut GuiContext,
         gui: &mut B::Gui,
+        delta_time: Duration,
     ) -> Result<bool> {
         // Generate UI
 
@@ -289,7 +301,7 @@ impl<B: App> BaseApp<B> {
             },
         };
 
-        base_app.update(self, gui, image_index)?;
+        base_app.update(self, gui, image_index, delta_time)?;
 
         self.in_flight_frames.fence().reset()?;
 
@@ -416,10 +428,15 @@ impl<B: App> BaseApp<B> {
             }]);
         }
 
-        // Gui pass
-        buffer.begin_rendering(swapchain_image_view, self.swapchain.extent);
-
+        // Rasterization
         base_app.record_raster_commands(self, buffer, image_index)?;
+
+        // UI
+        buffer.begin_rendering(
+            swapchain_image_view,
+            self.swapchain.extent,
+            vk::AttachmentLoadOp::DONT_CARE,
+        );
 
         gui_renderer.cmd_draw(buffer.inner, draw_data)?;
 
