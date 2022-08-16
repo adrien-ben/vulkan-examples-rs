@@ -2,6 +2,7 @@ use std::mem::size_of;
 use std::time::Duration;
 
 use app::anyhow::Result;
+use app::glam::Mat4;
 use app::vulkan::ash::vk;
 use app::vulkan::gpu_allocator::MemoryLocation;
 use app::vulkan::utils::create_gpu_only_buffer_from_data;
@@ -27,12 +28,16 @@ fn main() -> Result<()> {
 struct Particles {
     particle_count: u32,
     particles_buffer: VkBuffer,
-    ubo_buffer: VkBuffer,
-    _descriptor_pool: VkDescriptorPool,
+    compute_ubo_buffer: VkBuffer,
+    _compute_descriptor_pool: VkDescriptorPool,
     _compute_descriptor_layout: VkDescriptorSetLayout,
     compute_descriptor_set: VkDescriptorSet,
     compute_pipeline_layout: VkPipelineLayout,
     compute_pipeline: VkComputePipeline,
+    graphics_ubo_buffer: VkBuffer,
+    _graphics_descriptor_pool: VkDescriptorPool,
+    _graphics_descriptor_layout: VkDescriptorSetLayout,
+    graphics_descriptor_set: VkDescriptorSet,
     graphics_pipeline_layout: VkPipelineLayout,
     graphics_pipeline: VkGraphicsPipeline,
 }
@@ -44,13 +49,13 @@ impl App for Particles {
         let context = &mut base.context;
 
         let particles_buffer = create_particle_buffer(context)?;
-        let ubo_buffer = context.create_buffer(
+        let compute_ubo_buffer = context.create_buffer(
             vk::BufferUsageFlags::UNIFORM_BUFFER,
             MemoryLocation::CpuToGpu,
             size_of::<ParticleConfig>() as _,
         )?;
 
-        let descriptor_pool = context.create_descriptor_pool(
+        let compute_descriptor_pool = context.create_descriptor_pool(
             1,
             &[
                 vk::DescriptorPoolSize {
@@ -81,7 +86,8 @@ impl App for Particles {
             },
         ])?;
 
-        let compute_descriptor_set = descriptor_pool.allocate_set(&compute_descriptor_layout)?;
+        let compute_descriptor_set =
+            compute_descriptor_pool.allocate_set(&compute_descriptor_layout)?;
 
         compute_descriptor_set.update(&[
             VkWriteDescriptorSet {
@@ -93,7 +99,7 @@ impl App for Particles {
             VkWriteDescriptorSet {
                 binding: 1,
                 kind: VkWriteDescriptorSetKind::UniformBuffer {
-                    buffer: &ubo_buffer,
+                    buffer: &compute_ubo_buffer,
                 },
             },
         ]);
@@ -108,7 +114,41 @@ impl App for Particles {
             },
         )?;
 
-        let graphics_pipeline_layout = context.create_pipeline_layout(&[])?;
+        let graphics_ubo_buffer = context.create_buffer(
+            vk::BufferUsageFlags::UNIFORM_BUFFER,
+            MemoryLocation::CpuToGpu,
+            size_of::<CameraUbo>() as _,
+        )?;
+
+        let graphics_descriptor_pool = context.create_descriptor_pool(
+            1,
+            &[vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::UNIFORM_BUFFER,
+                descriptor_count: 1,
+            }],
+        )?;
+
+        let graphics_descriptor_layout =
+            context.create_descriptor_set_layout(&[vk::DescriptorSetLayoutBinding {
+                binding: 0,
+                descriptor_count: 1,
+                descriptor_type: vk::DescriptorType::UNIFORM_BUFFER,
+                stage_flags: vk::ShaderStageFlags::VERTEX,
+                ..Default::default()
+            }])?;
+
+        let graphics_descriptor_set =
+            graphics_descriptor_pool.allocate_set(&graphics_descriptor_layout)?;
+
+        graphics_descriptor_set.update(&[VkWriteDescriptorSet {
+            binding: 0,
+            kind: VkWriteDescriptorSetKind::UniformBuffer {
+                buffer: &graphics_ubo_buffer,
+            },
+        }]);
+
+        let graphics_pipeline_layout =
+            context.create_pipeline_layout(&[&graphics_descriptor_layout])?;
 
         let graphics_pipeline = create_graphics_pipeline(
             context,
@@ -120,12 +160,16 @@ impl App for Particles {
         Ok(Self {
             particle_count: 0,
             particles_buffer,
-            ubo_buffer,
-            _descriptor_pool: descriptor_pool,
+            compute_ubo_buffer,
+            _compute_descriptor_pool: compute_descriptor_pool,
             _compute_descriptor_layout: compute_descriptor_layout,
             compute_descriptor_set,
             compute_pipeline_layout,
             compute_pipeline,
+            graphics_ubo_buffer,
+            _graphics_descriptor_pool: graphics_descriptor_pool,
+            _graphics_descriptor_layout: graphics_descriptor_layout,
+            graphics_descriptor_set,
             graphics_pipeline_layout,
             graphics_pipeline,
         })
@@ -133,16 +177,21 @@ impl App for Particles {
 
     fn update(
         &mut self,
-        _: &app::BaseApp<Self>,
+        base: &app::BaseApp<Self>,
         gui: &mut <Self as App>::Gui,
         _: usize,
         delta_time: Duration,
     ) -> Result<()> {
         self.particle_count = gui.particle_count;
 
-        self.ubo_buffer.copy_data_to_buffer(&[ParticleConfig {
-            particle_count: self.particle_count,
-            elapsed: delta_time.as_secs_f32(),
+        self.compute_ubo_buffer
+            .copy_data_to_buffer(&[ParticleConfig {
+                particle_count: self.particle_count,
+                elapsed: delta_time.as_secs_f32(),
+            }])?;
+
+        self.graphics_ubo_buffer.copy_data_to_buffer(&[CameraUbo {
+            view_proj_matrix: base.camera.projection_matrix() * base.camera.view_matrix(),
         }])?;
 
         Ok(())
@@ -177,6 +226,12 @@ impl App for Particles {
             vk::AttachmentLoadOp::CLEAR,
         );
         buffer.bind_graphics_pipeline(&self.graphics_pipeline);
+        buffer.bind_descriptor_sets(
+            vk::PipelineBindPoint::GRAPHICS,
+            &self.graphics_pipeline_layout,
+            0,
+            &[&self.graphics_descriptor_set],
+        );
         buffer.bind_vertex_buffer(&self.particles_buffer);
         buffer.draw(self.particle_count);
         buffer.end_rendering();
@@ -227,8 +282,16 @@ struct ParticleConfig {
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
+struct CameraUbo {
+    view_proj_matrix: Mat4,
+}
+
+#[derive(Clone, Copy)]
+#[allow(dead_code)]
 struct Particle {
-    position: [f32; 4],
+    // position 0, 1, 2 - ttl 3
+    position_ttl: [f32; 4],
+    // direction 0, 1, 2 - speed 3
     velocity: [f32; 4],
     color: [f32; 4],
 }
@@ -271,11 +334,11 @@ fn create_particle_buffer(context: &VkContext) -> Result<VkBuffer> {
     let mut particles = Vec::with_capacity(MAX_PARTICLE_COUNT as usize);
     for _ in 0..MAX_PARTICLE_COUNT {
         particles.push(Particle {
-            position: [
+            position_ttl: [
                 rng.gen_range(-1.0..1.0f32),
                 rng.gen_range(-1.0..1.0f32),
                 rng.gen_range(-1.0..1.0f32),
-                0.0,
+                rng.gen_range(0.2..1.0f32),
             ],
             velocity: [
                 rng.gen_range(-1.0..1.0f32),

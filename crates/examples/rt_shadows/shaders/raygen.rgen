@@ -15,7 +15,7 @@ layout(location = 0) rayPayloadEXT vec3 hitValue;
 void main() {
 	const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
 	const vec2 inUV = pixelCenter/vec2(gl_LaunchSizeEXT.xy);
-	const vec2 d = (inUV * 2.0 - 1.0) * vec2(1.0, -1.0); // Otherwise y is inverted. vkCmdSetViewport does not seem to work
+	const vec2 d = (inUV * 2.0 - 1.0);
 
 	vec4 origin = scene.invertedView * vec4(0, 0, 0, 1);
 	vec4 target = scene.invertedProj * vec4(d.x, d.y, 1, 1) ;

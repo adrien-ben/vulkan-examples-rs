@@ -1,7 +1,7 @@
 #version 450
 
 struct Particle {
-  vec3 position;
+  vec4 position;
   vec4 direction;
   vec3 color;
 };
@@ -28,21 +28,21 @@ void main() {
     }
 
     // Read particle attribute
-    vec3 position = particles[index].position;
+    vec3 position = particles[index].position.xyz;
     vec3 direction = normalize(particles[index].direction.xyz);
     float speed = particles[index].direction.w;
+    float ttl = particles[index].position.w - cfg.elasped;
 
     // Move by velocity
     position += direction * cfg.elasped * speed;
 
     // Reset if out of bounds
-    if (position.x > 1.0 || position.x < -1.0 
-        || position.y > 1.0 || position.y < -1.0 
-        || position.z > 1.0 || position.z < -1.0) {
-
-      position = vec3(0.0);
+    if (ttl < 0) {
+      position = direction * 0.2;
+      ttl = 1.0;
     }
 
     // Write back
-    particles[index].position = position;
+    particles[index].position.xyz = position;
+    particles[index].position.w = ttl;
 }
