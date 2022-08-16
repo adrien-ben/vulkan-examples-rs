@@ -15,8 +15,6 @@ const HEIGHT: u32 = 1080;
 const APP_NAME: &str = "Ray traced shadows";
 
 const MODEL_PATH: &str = "./assets/models/shadows.glb";
-const EYE_POS: [f32; 3] = [-1.0, 1.5, 3.0];
-const EYE_TARGET: [f32; 3] = [0.0, 1.0, 0.0];
 
 fn main() -> Result<()> {
     app::run::<Shadows>(APP_NAME, WIDTH, HEIGHT, true)
@@ -64,6 +62,9 @@ impl App for Shadows {
             &ubo_buffer,
         )?;
 
+        base.camera.position = vec3(-1.0, 1.5, 3.0);
+        base.camera.direction = vec3(1.0, -0.5, -3.0);
+
         Ok(Self {
             ubo_buffer,
             _model: model,
@@ -82,17 +83,10 @@ impl App for Shadows {
         _image_index: usize,
         _: Duration,
     ) -> Result<()> {
-        let view = Mat4::look_at_rh(
-            gui.camera.position.into(),
-            gui.camera.target.into(),
-            vec3(0.0, 1.0, 0.0),
-        );
+        let view = base.camera.view_matrix();
         let inverted_view = view.inverse();
 
-        let width = base.swapchain.extent.width as f32;
-        let height = base.swapchain.extent.height as f32;
-
-        let proj = Mat4::perspective_infinite_rh(60f32.to_radians(), width / height, 0.1);
+        let proj = base.camera.projection_matrix();
         let inverted_proj = proj.inverse();
 
         let light_direction = [
@@ -169,17 +163,12 @@ impl App for Shadows {
 
 #[derive(Debug, Clone, Copy)]
 struct Gui {
-    camera: Camera,
     light: Light,
 }
 
 impl app::Gui for Gui {
     fn new() -> Result<Self> {
         Ok(Gui {
-            camera: Camera {
-                position: EYE_POS,
-                target: EYE_TARGET,
-            },
             light: Light {
                 direction: [-2.0, -1.0, -2.0],
                 color: [1.0; 3],
@@ -191,14 +180,6 @@ impl app::Gui for Gui {
         Window::new("Vulkan RT")
             .size([300.0, 350.0], Condition::FirstUseEver)
             .build(ui, || {
-                // Cam controls
-                ui.text_wrapped("Camera");
-                ui.separator();
-
-                ui.input_float3("position", &mut self.camera.position)
-                    .build();
-                ui.input_float3("target", &mut self.camera.target).build();
-
                 ui.text_wrapped("Light");
                 ui.separator();
 
@@ -244,12 +225,6 @@ struct DescriptorRes {
     _pool: VkDescriptorPool,
     static_set: VkDescriptorSet,
     dynamic_sets: Vec<VkDescriptorSet>,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct Camera {
-    position: [f32; 3],
-    target: [f32; 3],
 }
 
 #[derive(Debug, Clone, Copy)]

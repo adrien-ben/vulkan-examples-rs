@@ -3,8 +3,12 @@ pub extern crate glam;
 pub extern crate log;
 pub extern crate vulkan;
 
+mod camera;
+
 use anyhow::Result;
 use ash::vk::{self};
+use camera::{Camera, Controls};
+use glam::vec3;
 use gpu_allocator::MemoryLocation;
 use gui::{
     imgui::{DrawData, Ui},
@@ -29,13 +33,14 @@ const VULKAN_VERSION: VkVersion = VkVersion::from_major_minor(1, 3);
 
 pub struct BaseApp<B: App> {
     phantom: PhantomData<B>,
+    raytracing_enabled: bool,
     pub swapchain: VkSwapchain,
     pub command_pool: VkCommandPool,
     pub storage_images: Vec<ImageAndView>,
     command_buffers: Vec<VkCommandBuffer>,
     in_flight_frames: InFlightFrames,
     pub context: VkContext,
-    raytracing_enabled: bool,
+    pub camera: Camera,
 }
 
 pub trait App: Sized {
@@ -115,6 +120,8 @@ pub fn run<A: App + 'static>(
         &window,
         IN_FLIGHT_FRAMES as _,
     )?;
+    let mut controls = Controls::default();
+
     let mut is_swapchain_dirty = false;
     let mut last_frame = Instant::now();
     let mut delta_time = Duration::ZERO;
@@ -125,6 +132,7 @@ pub fn run<A: App + 'static>(
         let app = &mut app; // Make sure it is dropped before base_app
 
         gui_context.handle_event(&window, &event);
+        controls = controls.handle_event(&event);
 
         match event {
             Event::NewEvents(_) => {
@@ -132,6 +140,8 @@ pub fn run<A: App + 'static>(
                 delta_time = now - last_frame;
                 gui_context.update_delta_time(delta_time);
                 last_frame = now;
+
+                controls = controls.reset();
             }
             // On resize
             Event::WindowEvent {
@@ -155,6 +165,8 @@ pub fn run<A: App + 'static>(
                         return;
                     }
                 }
+
+                base_app.camera = base_app.camera.update(&controls, delta_time);
 
                 is_swapchain_dirty = base_app
                     .draw(&window, app, &mut gui_context, &mut ui, delta_time)
@@ -228,15 +240,25 @@ impl<B: App> BaseApp<B> {
 
         let in_flight_frames = InFlightFrames::new(&context, IN_FLIGHT_FRAMES)?;
 
+        let camera = Camera::new(
+            vec3(0.0, 0.0, 1.0),
+            vec3(0.0, 0.0, -1.0),
+            60.0,
+            window.inner_size().width as f32 / window.inner_size().height as f32,
+            0.1,
+            10.0,
+        );
+
         Ok(Self {
             phantom: PhantomData,
+            raytracing_enabled: enable_raytracing,
             context,
             command_pool,
             swapchain,
             storage_images,
             command_buffers,
             in_flight_frames,
-            raytracing_enabled: enable_raytracing,
+            camera,
         })
     }
 
@@ -257,6 +279,9 @@ impl<B: App> BaseApp<B> {
         )?;
 
         let _ = std::mem::replace(&mut self.storage_images, storage_images);
+
+        // Update camera aspect ration
+        self.camera.aspect_ratio = width as f32 / height as f32;
 
         Ok(())
     }
