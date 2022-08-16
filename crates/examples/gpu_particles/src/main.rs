@@ -161,7 +161,7 @@ impl App for Particles {
             0,
             &[&self.compute_descriptor_set],
         );
-        buffer.dispatch(MAX_PARTICLE_COUNT / 256, 1, 1);
+        buffer.dispatch(self.particle_count, 1, 1);
 
         buffer.pipeline_buffer_barriers(&[VkBufferBarrier {
             buffer: &self.particles_buffer,

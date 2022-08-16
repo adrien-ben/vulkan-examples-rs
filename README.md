@@ -27,6 +27,26 @@ You can run one of the following example.
 .\scripts\run.ps1 <example>
 ```
 
+# Requirements
+
+All examples use Vulkan 1.3 and the following features:
+
+- dynamic_rendering
+- synchronization2
+
+Ray tracing examples use the following extensions and features:
+
+- VK_KHR_ray_tracing_pipeline
+    - ray_tracing_pipeline
+- VK_KHR_acceleration_structure
+    - acceleration_structure
+- VK_KHR_deferred_host_operations
+- Vulkan 1.2's features
+    - runtime_descriptor_array
+    - buffer_device_address
+
+> RT is only enabled on examples using it, so other examples can run on hardware that does not support it.
+
 ## Useful links
 
 - [NVidia tutorial](https://nvpro-samples.github.io/vk_raytracing_tutorial_KHR/)
