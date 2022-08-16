@@ -6,17 +6,22 @@ struct Particle {
   vec3 color;
 };
 
-// Binding 0 : Position storage buffer
 layout(std430, binding = 0) buffer Buffer {
    Particle particles[];
 };
 
 layout(binding = 1) uniform Config {
+  vec3 attractorCenter;
+  float attractorStrength;
   uint particleCount;
   float elasped;
 } cfg;
 
 layout (local_size_x = 256) in;
+
+float rand(vec2 co){
+    return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
+}
 
 void main() {
     // Current SSBO index
@@ -30,19 +35,19 @@ void main() {
     // Read particle attribute
     vec3 position = particles[index].position.xyz;
     vec3 direction = normalize(particles[index].direction.xyz);
-    float speed = particles[index].direction.w;
-    float ttl = particles[index].position.w - cfg.elasped;
+
+    const vec3 MAX_SPEED = vec3(100.0);
+
+    // compute velocity
+    float distanceToMass = length(cfg.attractorCenter - position);
+    float speedFactor = rand(gl_GlobalInvocationID.xx) * 0.2 + 0.8;
+    vec3 toMass = normalize(cfg.attractorCenter - position) * distanceToMass * cfg.elasped * cfg.attractorStrength * speedFactor;
+    direction = clamp(direction + toMass, -MAX_SPEED, MAX_SPEED);
 
     // Move by velocity
-    position += direction * cfg.elasped * speed;
-
-    // Reset if out of bounds
-    if (ttl < 0) {
-      position = direction * 0.2;
-      ttl = 1.0;
-    }
+    position += direction * cfg.elasped;
 
     // Write back
     particles[index].position.xyz = position;
-    particles[index].position.w = ttl;
+    particles[index].direction.xyz = direction;
 }

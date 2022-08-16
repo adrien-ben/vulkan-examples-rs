@@ -27,6 +27,8 @@ fn main() -> Result<()> {
 }
 struct Particles {
     particle_count: u32,
+    attractor_center: [f32; 3],
+    timer: f32,
     particles_buffer: VkBuffer,
     compute_ubo_buffer: VkBuffer,
     _compute_descriptor_pool: VkDescriptorPool,
@@ -157,8 +159,12 @@ impl App for Particles {
             base.swapchain.format,
         )?;
 
+        base.camera.z_far = 100.0;
+
         Ok(Self {
             particle_count: 0,
+            attractor_center: [0.0; 3],
+            timer: 0.0,
             particles_buffer,
             compute_ubo_buffer,
             _compute_descriptor_pool: compute_descriptor_pool,
@@ -184,8 +190,22 @@ impl App for Particles {
     ) -> Result<()> {
         self.particle_count = gui.particle_count;
 
+        self.timer += delta_time.as_secs_f32();
+        if self.timer > 10.0 {
+            let mut rng = rand::thread_rng();
+            self.attractor_center = [
+                rng.gen_range(-1.0..1.0),
+                rng.gen_range(-1.0..1.0),
+                rng.gen_range(-1.0..1.0),
+            ];
+
+            self.timer = 0.0;
+        }
+
         self.compute_ubo_buffer
             .copy_data_to_buffer(&[ParticleConfig {
+                attractor_center: self.attractor_center,
+                attractor_strength: gui.attractor_strength,
                 particle_count: self.particle_count,
                 elapsed: delta_time.as_secs_f32(),
             }])?;
@@ -224,6 +244,7 @@ impl App for Particles {
             &base.swapchain.views[image_index],
             base.swapchain.extent,
             vk::AttachmentLoadOp::CLEAR,
+            Some([0.0, 0.0, 0.0, 1.0]),
         );
         buffer.bind_graphics_pipeline(&self.graphics_pipeline);
         buffer.bind_descriptor_sets(
@@ -254,12 +275,14 @@ impl App for Particles {
 #[derive(Debug, Clone, Copy)]
 struct Gui {
     particle_count: u32,
+    attractor_strength: f32,
 }
 
 impl app::Gui for Gui {
     fn new() -> Result<Self> {
         Ok(Gui {
             particle_count: MAX_PARTICLE_COUNT / 10,
+            attractor_strength: 9.81,
         })
     }
 
@@ -269,6 +292,8 @@ impl app::Gui for Gui {
             .build(ui, || {
                 Slider::new("Particle count", 0, MAX_PARTICLE_COUNT)
                     .build(ui, &mut self.particle_count);
+                ui.input_float("Attractor's strength", &mut self.attractor_strength)
+                    .build();
             });
     }
 }
@@ -276,6 +301,8 @@ impl app::Gui for Gui {
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
 struct ParticleConfig {
+    attractor_center: [f32; 3],
+    attractor_strength: f32,
     particle_count: u32,
     elapsed: f32,
 }
@@ -289,10 +316,10 @@ struct CameraUbo {
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
 struct Particle {
-    // position 0, 1, 2 - ttl 3
-    position_ttl: [f32; 4],
-    // direction 0, 1, 2 - speed 3
-    velocity: [f32; 4],
+    // position 0, 1, 2 - pad 3
+    position: [f32; 4],
+    // direction 0, 1, 2 - pad 3
+    direction: [f32; 4],
     color: [f32; 4],
 }
 
@@ -325,26 +352,26 @@ impl Vertex for Particle {
 
 fn create_particle_buffer(context: &VkContext) -> Result<VkBuffer> {
     let colors = [
-        [1.0, 0.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0, 0.0],
-        [1.0, 0.0, 1.0, 0.0],
+        [1.0, 0.0, 0.0, 1.0],
+        [0.0, 1.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0, 1.0],
     ];
 
     let mut rng = rand::thread_rng();
     let mut particles = Vec::with_capacity(MAX_PARTICLE_COUNT as usize);
     for _ in 0..MAX_PARTICLE_COUNT {
         particles.push(Particle {
-            position_ttl: [
+            position: [
                 rng.gen_range(-1.0..1.0f32),
                 rng.gen_range(-1.0..1.0f32),
                 rng.gen_range(-1.0..1.0f32),
-                rng.gen_range(0.2..1.0f32),
+                0.0,
             ],
-            velocity: [
+            direction: [
                 rng.gen_range(-1.0..1.0f32),
                 rng.gen_range(-1.0..1.0f32),
                 rng.gen_range(-1.0..1.0f32),
-                rng.gen_range(0.5..1.0f32),
+                0.0,
             ],
             color: colors[rng.gen_range(0..colors.len())],
         });
@@ -380,7 +407,17 @@ fn create_graphics_pipeline(
             ],
             primitive_topology: vk::PrimitiveTopology::POINT_LIST,
             extent,
-            color_attachement_format,
+            color_attachment_format: color_attachement_format,
+            color_attachment_blend: Some(vk::PipelineColorBlendAttachmentState {
+                blend_enable: vk::TRUE,
+                src_color_blend_factor: vk::BlendFactor::ONE,
+                dst_color_blend_factor: vk::BlendFactor::ONE,
+                color_blend_op: vk::BlendOp::ADD,
+                src_alpha_blend_factor: vk::BlendFactor::ONE,
+                dst_alpha_blend_factor: vk::BlendFactor::ZERO,
+                alpha_blend_op: vk::BlendOp::ADD,
+                color_write_mask: vk::ColorComponentFlags::RGBA,
+            }),
         },
     )
 }

@@ -461,6 +461,7 @@ impl<B: App> BaseApp<B> {
             swapchain_image_view,
             self.swapchain.extent,
             vk::AttachmentLoadOp::DONT_CARE,
+            None,
         );
 
         gui_renderer.cmd_draw(buffer.inner, draw_data)?;

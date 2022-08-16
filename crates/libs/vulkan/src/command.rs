@@ -385,6 +385,7 @@ impl VkCommandBuffer {
         image_view: &VkImageView,
         extent: vk::Extent2D,
         load_op: vk::AttachmentLoadOp,
+        clear_color: Option<[f32; 4]>,
     ) {
         let color_attachment_info = vk::RenderingAttachmentInfo::builder()
             .image_view(image_view.inner)
@@ -393,7 +394,7 @@ impl VkCommandBuffer {
             .store_op(vk::AttachmentStoreOp::STORE)
             .clear_value(vk::ClearValue {
                 color: vk::ClearColorValue {
-                    float32: [1.0, 1.0, 1.0, 1.0],
+                    float32: clear_color.unwrap_or([1.0; 4]),
                 },
             });
 

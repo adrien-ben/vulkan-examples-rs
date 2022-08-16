@@ -15,7 +15,8 @@ pub struct VkGraphicsPipelineCreateInfo<'a> {
     pub shaders: &'a [VkGraphicsShaderCreateInfo<'a>],
     pub primitive_topology: vk::PrimitiveTopology,
     pub extent: vk::Extent2D,
-    pub color_attachement_format: vk::Format,
+    pub color_attachment_format: vk::Format,
+    pub color_attachment_blend: Option<vk::PipelineColorBlendAttachmentState>,
 }
 
 pub trait Vertex {
@@ -98,23 +99,21 @@ impl VkGraphicsPipeline {
             .alpha_to_coverage_enable(false)
             .alpha_to_one_enable(false);
 
-        let color_blend_attachments = [vk::PipelineColorBlendAttachmentState::builder()
-            .color_write_mask(vk::ColorComponentFlags::RGBA)
-            .blend_enable(false)
-            .src_color_blend_factor(vk::BlendFactor::ONE)
-            .dst_color_blend_factor(vk::BlendFactor::ZERO)
-            .color_blend_op(vk::BlendOp::ADD)
-            .src_alpha_blend_factor(vk::BlendFactor::ONE)
-            .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
-            .alpha_blend_op(vk::BlendOp::ADD)
-            .build()];
+        let color_blend_attachment =
+            create_info
+                .color_attachment_blend
+                .unwrap_or(vk::PipelineColorBlendAttachmentState {
+                    color_write_mask: vk::ColorComponentFlags::RGBA,
+                    ..Default::default()
+                });
+        let color_blend_attachments = [color_blend_attachment];
         let color_blending_info = vk::PipelineColorBlendStateCreateInfo::builder()
             .logic_op_enable(false)
             .logic_op(vk::LogicOp::COPY)
             .attachments(&color_blend_attachments)
             .blend_constants([0.0, 0.0, 0.0, 0.0]);
 
-        let color_attachment_formats = [create_info.color_attachement_format];
+        let color_attachment_formats = [create_info.color_attachment_format];
         let mut rendering_info = vk::PipelineRenderingCreateInfo::builder()
             .color_attachment_formats(&color_attachment_formats);
 

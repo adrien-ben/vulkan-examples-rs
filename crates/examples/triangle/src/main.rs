@@ -77,6 +77,7 @@ impl App for Triangle {
             &base.swapchain.views[image_index],
             base.swapchain.extent,
             vk::AttachmentLoadOp::CLEAR,
+            None,
         );
         buffer.bind_graphics_pipeline(&self.pipeline);
         buffer.bind_vertex_buffer(&self.vertex_buffer);
@@ -147,7 +148,7 @@ fn create_pipeline(
     context: &VkContext,
     layout: &VkPipelineLayout,
     extent: vk::Extent2D,
-    color_attachement_format: vk::Format,
+    color_attachment_format: vk::Format,
 ) -> Result<VkGraphicsPipeline> {
     context.create_graphics_pipeline::<Vertex>(
         layout,
@@ -164,7 +165,8 @@ fn create_pipeline(
             ],
             primitive_topology: vk::PrimitiveTopology::TRIANGLE_LIST,
             extent,
-            color_attachement_format,
+            color_attachment_format,
+            color_attachment_blend: None,
         },
     )
 }
