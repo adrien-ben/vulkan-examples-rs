@@ -13,7 +13,7 @@ use app::vulkan::{
     VkWriteDescriptorSet, VkWriteDescriptorSetKind,
 };
 use app::App;
-use gui::imgui::{Condition, Slider, Ui, Window};
+use gui::imgui::{ColorEdit, Condition, Slider, Ui, Window};
 use rand::Rng;
 
 const WIDTH: u32 = 1024;
@@ -22,6 +22,10 @@ const APP_NAME: &str = "GPU Particles";
 
 const DISPATCH_GROUP_SIZE_X: u32 = 256;
 const MAX_PARTICLE_COUNT: u32 = DISPATCH_GROUP_SIZE_X * 4048;
+const MIN_PARTICLE_SIZE: f32 = 1.0;
+const MAX_PARTICLE_SIZE: f32 = 3.0;
+const MIN_ATTRACTOR_STRENGTH: u32 = 0;
+const MAX_ATTRACTOR_STRENGTH: u32 = 100;
 
 fn main() -> Result<()> {
     app::run::<Particles>(APP_NAME, WIDTH, HEIGHT, false)
@@ -29,7 +33,6 @@ fn main() -> Result<()> {
 struct Particles {
     particle_count: u32,
     attractor_center: [f32; 3],
-    timer: f32,
     particles_buffer: VkBuffer,
     compute_ubo_buffer: VkBuffer,
     _compute_descriptor_pool: VkDescriptorPool,
@@ -55,7 +58,7 @@ impl App for Particles {
         let compute_ubo_buffer = context.create_buffer(
             vk::BufferUsageFlags::UNIFORM_BUFFER,
             MemoryLocation::CpuToGpu,
-            size_of::<ParticleConfig>() as _,
+            size_of::<ComputeUbo>() as _,
         )?;
 
         let compute_descriptor_pool = context.create_descriptor_pool(
@@ -120,7 +123,7 @@ impl App for Particles {
         let graphics_ubo_buffer = context.create_buffer(
             vk::BufferUsageFlags::UNIFORM_BUFFER,
             MemoryLocation::CpuToGpu,
-            size_of::<CameraUbo>() as _,
+            size_of::<GraphicsUbo>() as _,
         )?;
 
         let graphics_descriptor_pool = context.create_descriptor_pool(
@@ -156,12 +159,12 @@ impl App for Particles {
         let graphics_pipeline =
             create_graphics_pipeline(context, &graphics_pipeline_layout, base.swapchain.format)?;
 
+        base.camera.position.z = 2.0;
         base.camera.z_far = 100.0;
 
         Ok(Self {
             particle_count: 0,
             attractor_center: [0.0; 3],
-            timer: 0.0,
             particles_buffer,
             compute_ubo_buffer,
             _compute_descriptor_pool: compute_descriptor_pool,
@@ -186,30 +189,31 @@ impl App for Particles {
         delta_time: Duration,
     ) -> Result<()> {
         self.particle_count = gui.particle_count;
+        self.attractor_center = gui
+            .new_attractor_position
+            .take()
+            .unwrap_or(self.attractor_center);
 
-        self.timer += delta_time.as_secs_f32();
-        if self.timer > 10.0 {
-            let mut rng = rand::thread_rng();
-            self.attractor_center = [
-                rng.gen_range(-1.0..1.0),
-                rng.gen_range(-1.0..1.0),
-                rng.gen_range(-1.0..1.0),
-            ];
-
-            self.timer = 0.0;
-        }
-
-        self.compute_ubo_buffer
-            .copy_data_to_buffer(&[ParticleConfig {
-                attractor_center: self.attractor_center,
-                attractor_strength: gui.attractor_strength,
-                particle_count: self.particle_count,
-                elapsed: delta_time.as_secs_f32(),
-            }])?;
-
-        self.graphics_ubo_buffer.copy_data_to_buffer(&[CameraUbo {
-            view_proj_matrix: base.camera.projection_matrix() * base.camera.view_matrix(),
+        self.compute_ubo_buffer.copy_data_to_buffer(&[ComputeUbo {
+            attractor_center: [
+                self.attractor_center[0],
+                self.attractor_center[1],
+                self.attractor_center[2],
+                0.0,
+            ],
+            color1: gui.color1,
+            color2: gui.color2,
+            color3: gui.color3,
+            attractor_strength: gui.attractor_strength,
+            particle_count: self.particle_count,
+            elapsed: delta_time.as_secs_f32(),
         }])?;
+
+        self.graphics_ubo_buffer
+            .copy_data_to_buffer(&[GraphicsUbo {
+                view_proj_matrix: base.camera.projection_matrix() * base.camera.view_matrix(),
+                particle_size: gui.particle_size,
+            }])?;
 
         Ok(())
     }
@@ -267,42 +271,99 @@ impl App for Particles {
 #[derive(Debug, Clone, Copy)]
 struct Gui {
     particle_count: u32,
-    attractor_strength: f32,
+    particle_size: f32,
+    attractor_position: [f32; 3],
+    new_attractor_position: Option<[f32; 3]>,
+    attractor_strength: u32,
+    color1: [f32; 4],
+    color2: [f32; 4],
+    color3: [f32; 4],
 }
 
 impl app::Gui for Gui {
     fn new() -> Result<Self> {
         Ok(Gui {
             particle_count: MAX_PARTICLE_COUNT / 10,
-            attractor_strength: 9.81,
+            particle_size: MIN_PARTICLE_SIZE,
+            attractor_position: [0.0; 3],
+            new_attractor_position: None,
+            attractor_strength: MAX_ATTRACTOR_STRENGTH / 10,
+            color1: [1.0, 0.0, 0.0, 1.0],
+            color2: [0.0, 1.0, 0.0, 1.0],
+            color3: [0.0, 0.0, 1.0, 1.0],
         })
     }
 
     fn build(&mut self, ui: &Ui) {
         Window::new("Particles")
-            .size([300.0, 100.0], Condition::FirstUseEver)
+            .position([5.0, 5.0], Condition::FirstUseEver)
+            .size([300.0, 250.0], Condition::FirstUseEver)
+            .resizable(false)
+            .movable(false)
             .build(ui, || {
-                Slider::new("Particle count", 0, MAX_PARTICLE_COUNT)
-                    .build(ui, &mut self.particle_count);
-                ui.input_float("Attractor's strength", &mut self.attractor_strength)
+                ui.text("Particles");
+                Slider::new("Count", 0, MAX_PARTICLE_COUNT).build(ui, &mut self.particle_count);
+                Slider::new("Size", MIN_PARTICLE_SIZE, MAX_PARTICLE_SIZE)
+                    .display_format("%.1f")
+                    .build(ui, &mut self.particle_size);
+                ColorEdit::new("Color 1", &mut self.color1)
+                    .alpha(false)
+                    .tooltip(false)
+                    .build(ui);
+                ColorEdit::new("Color 2", &mut self.color2)
+                    .alpha(false)
+                    .tooltip(false)
+                    .build(ui);
+                ColorEdit::new("Color 3", &mut self.color3)
+                    .alpha(false)
+                    .tooltip(false)
+                    .build(ui);
+                ui.text("Attractor");
+                Slider::new("Strength", MIN_ATTRACTOR_STRENGTH, MAX_ATTRACTOR_STRENGTH)
+                    .build(ui, &mut self.attractor_strength);
+                ui.input_float3("Position", &mut self.attractor_position)
                     .build();
+                if ui.button("Apply") {
+                    self.new_attractor_position = Some(self.attractor_position);
+                }
+                ui.same_line();
+                if ui.button("Randomize") {
+                    let mut rng = rand::thread_rng();
+                    let new_position = [
+                        rng.gen_range(-1.0..1.0),
+                        rng.gen_range(-1.0..1.0),
+                        rng.gen_range(-1.0..1.0),
+                    ];
+                    self.attractor_position = new_position;
+                    self.new_attractor_position = Some(new_position);
+                }
+                ui.same_line();
+                if ui.button("Reset") {
+                    let new_position = [0.0; 3];
+                    self.attractor_position = new_position;
+                    self.new_attractor_position = Some(new_position);
+                }
             });
     }
 }
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
-struct ParticleConfig {
-    attractor_center: [f32; 3],
-    attractor_strength: f32,
+struct ComputeUbo {
+    attractor_center: [f32; 4],
+    color1: [f32; 4],
+    color2: [f32; 4],
+    color3: [f32; 4],
+    attractor_strength: u32,
     particle_count: u32,
     elapsed: f32,
 }
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
-struct CameraUbo {
+struct GraphicsUbo {
     view_proj_matrix: Mat4,
+    particle_size: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -343,12 +404,6 @@ impl Vertex for Particle {
 }
 
 fn create_particle_buffer(context: &VkContext) -> Result<VkBuffer> {
-    let colors = [
-        [1.0, 0.0, 0.0, 1.0],
-        [0.0, 1.0, 0.0, 1.0],
-        [0.0, 0.0, 1.0, 1.0],
-    ];
-
     let mut rng = rand::thread_rng();
     let mut particles = Vec::with_capacity(MAX_PARTICLE_COUNT as usize);
     for _ in 0..MAX_PARTICLE_COUNT {
@@ -365,7 +420,7 @@ fn create_particle_buffer(context: &VkContext) -> Result<VkBuffer> {
                 rng.gen_range(-1.0..1.0f32),
                 0.0,
             ],
-            color: colors[rng.gen_range(0..colors.len())],
+            color: [1.0, 1.0, 1.0, 1.0],
         });
     }
 

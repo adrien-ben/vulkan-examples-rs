@@ -10,12 +10,13 @@ layout(std430, binding = 0) buffer Buffer {
    Particle particles[];
 };
 
-layout(binding = 1) uniform Config {
-  vec3 attractorCenter;
-  float attractorStrength;
+layout(binding = 1) uniform Ubo {
+  vec4 attractorCenter;
+  vec4 particle_colors[3];
+  uint attractorStrength;
   uint particleCount;
   float elasped;
-} cfg;
+} ubo;
 
 layout (local_size_x = 256) in;
 
@@ -28,7 +29,7 @@ void main() {
     uint index = gl_GlobalInvocationID.x;
 
     // Don't try to write beyond particle count
-    if (index >= cfg.particleCount) {
+    if (index >= ubo.particleCount) {
       return;
     }
 
@@ -39,15 +40,19 @@ void main() {
     const vec3 MAX_SPEED = vec3(100.0);
 
     // compute velocity
-    float distanceToMass = length(cfg.attractorCenter - position);
+    float distanceToMass = length(ubo.attractorCenter.xyz - position);
     float speedFactor = rand(gl_GlobalInvocationID.xx) * 0.2 + 0.8;
-    vec3 toMass = normalize(cfg.attractorCenter - position) * distanceToMass * cfg.elasped * cfg.attractorStrength * speedFactor;
+    vec3 toMass = normalize(ubo.attractorCenter.xyz - position) * distanceToMass * ubo.elasped * ubo.attractorStrength * speedFactor;
     direction = clamp(direction + toMass, -MAX_SPEED, MAX_SPEED);
 
     // Move by velocity
-    position += direction * cfg.elasped;
+    position += direction * ubo.elasped;
+
+    // choose particle color
+    uint color_index = uint(floor(rand(gl_GlobalInvocationID.xx / 100.0) * 3.0));
 
     // Write back
     particles[index].position.xyz = position;
     particles[index].direction.xyz = direction;
+    particles[index].color = ubo.particle_colors[color_index].rgb;
 }

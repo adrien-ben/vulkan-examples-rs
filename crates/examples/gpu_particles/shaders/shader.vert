@@ -4,15 +4,16 @@
 layout(location = 0) in vec3 vPosition;
 layout(location = 1) in vec4 vColor;
 
-layout(binding = 0) uniform Camera {
+layout(binding = 0) uniform Ubo {
   mat4 projectionViewMatrix;
-} camera;
+  float particleSize;
+} ubo;
 
 layout(location = 0) out vec4 oColor;
 
 void main() {
     oColor = vColor;
 
-    gl_PointSize = 2.0;
-    gl_Position = camera.projectionViewMatrix * vec4(vPosition.x, vPosition.y, vPosition.z, 1.0);
+    gl_PointSize = ubo.particleSize;
+    gl_Position = ubo.projectionViewMatrix * vec4(vPosition.x, vPosition.y, vPosition.z, 1.0);
 }
