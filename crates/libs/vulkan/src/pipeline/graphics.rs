@@ -93,7 +93,9 @@ impl VkGraphicsPipeline {
 
         let viewport_info = vk::PipelineViewportStateCreateInfo::builder()
             .viewports(&viewports)
-            .scissors(&scissors);
+            .viewport_count(1)
+            .scissors(&scissors)
+            .scissor_count(1);
 
         // raster
         let rasterizer_info = vk::PipelineRasterizationStateCreateInfo::builder()
