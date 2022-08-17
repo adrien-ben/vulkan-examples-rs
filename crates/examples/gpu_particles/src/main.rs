@@ -20,7 +20,8 @@ const WIDTH: u32 = 1024;
 const HEIGHT: u32 = 576;
 const APP_NAME: &str = "GPU Particles";
 
-const MAX_PARTICLE_COUNT: u32 = 256 * 4048;
+const DISPATCH_GROUP_SIZE_X: u32 = 256;
+const MAX_PARTICLE_COUNT: u32 = DISPATCH_GROUP_SIZE_X * 4048;
 
 fn main() -> Result<()> {
     app::run::<Particles>(APP_NAME, WIDTH, HEIGHT, false)
@@ -226,7 +227,7 @@ impl App for Particles {
             0,
             &[&self.compute_descriptor_set],
         );
-        buffer.dispatch(self.particle_count, 1, 1);
+        buffer.dispatch(self.particle_count / DISPATCH_GROUP_SIZE_X, 1, 1);
 
         buffer.pipeline_buffer_barriers(&[VkBufferBarrier {
             buffer: &self.particles_buffer,
@@ -252,7 +253,7 @@ impl App for Particles {
         buffer.bind_vertex_buffer(&self.particles_buffer);
         buffer.set_viewport(base.swapchain.extent);
         buffer.set_scissor(base.swapchain.extent);
-        buffer.draw(self.particle_count);
+        buffer.draw(self.particle_count / DISPATCH_GROUP_SIZE_X * DISPATCH_GROUP_SIZE_X);
         buffer.end_rendering();
 
         Ok(())
