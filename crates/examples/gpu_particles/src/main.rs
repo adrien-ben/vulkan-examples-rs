@@ -152,12 +152,8 @@ impl App for Particles {
         let graphics_pipeline_layout =
             context.create_pipeline_layout(&[&graphics_descriptor_layout])?;
 
-        let graphics_pipeline = create_graphics_pipeline(
-            context,
-            &graphics_pipeline_layout,
-            base.swapchain.extent,
-            base.swapchain.format,
-        )?;
+        let graphics_pipeline =
+            create_graphics_pipeline(context, &graphics_pipeline_layout, base.swapchain.format)?;
 
         base.camera.z_far = 100.0;
 
@@ -254,20 +250,15 @@ impl App for Particles {
             &[&self.graphics_descriptor_set],
         );
         buffer.bind_vertex_buffer(&self.particles_buffer);
+        buffer.set_viewport(base.swapchain.extent);
+        buffer.set_scissor(base.swapchain.extent);
         buffer.draw(self.particle_count);
         buffer.end_rendering();
 
         Ok(())
     }
 
-    fn on_recreate_swapchain(&mut self, base: &app::BaseApp<Self>) -> Result<()> {
-        self.graphics_pipeline = create_graphics_pipeline(
-            &base.context,
-            &self.graphics_pipeline_layout,
-            base.swapchain.extent,
-            base.swapchain.format,
-        )?;
-
+    fn on_recreate_swapchain(&mut self, _: &app::BaseApp<Self>) -> Result<()> {
         Ok(())
     }
 }
@@ -389,7 +380,6 @@ fn create_particle_buffer(context: &VkContext) -> Result<VkBuffer> {
 fn create_graphics_pipeline(
     context: &VkContext,
     layout: &VkPipelineLayout,
-    extent: vk::Extent2D,
     color_attachement_format: vk::Format,
 ) -> Result<VkGraphicsPipeline> {
     context.create_graphics_pipeline::<Particle>(
@@ -406,7 +396,7 @@ fn create_graphics_pipeline(
                 },
             ],
             primitive_topology: vk::PrimitiveTopology::POINT_LIST,
-            extent,
+            extent: None,
             color_attachment_format: color_attachement_format,
             color_attachment_blend: Some(vk::PipelineColorBlendAttachmentState {
                 blend_enable: vk::TRUE,
@@ -418,6 +408,7 @@ fn create_graphics_pipeline(
                 alpha_blend_op: vk::BlendOp::ADD,
                 color_write_mask: vk::ColorComponentFlags::RGBA,
             }),
+            dynamic_states: Some(&[vk::DynamicState::SCISSOR, vk::DynamicState::VIEWPORT]),
         },
     )
 }

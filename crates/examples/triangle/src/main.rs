@@ -18,7 +18,7 @@ fn main() -> Result<()> {
 }
 struct Triangle {
     vertex_buffer: VkBuffer,
-    pipeline_layout: VkPipelineLayout,
+    _pipeline_layout: VkPipelineLayout,
     pipeline: VkGraphicsPipeline,
 }
 
@@ -32,28 +32,16 @@ impl App for Triangle {
 
         let pipeline_layout = context.create_pipeline_layout(&[])?;
 
-        let pipeline = create_pipeline(
-            context,
-            &pipeline_layout,
-            base.swapchain.extent,
-            base.swapchain.format,
-        )?;
+        let pipeline = create_pipeline(context, &pipeline_layout, base.swapchain.format)?;
 
         Ok(Self {
             vertex_buffer,
-            pipeline_layout,
+            _pipeline_layout: pipeline_layout,
             pipeline,
         })
     }
 
-    fn on_recreate_swapchain(&mut self, base: &app::BaseApp<Self>) -> Result<()> {
-        self.pipeline = create_pipeline(
-            &base.context,
-            &self.pipeline_layout,
-            base.swapchain.extent,
-            base.swapchain.format,
-        )?;
-
+    fn on_recreate_swapchain(&mut self, _: &app::BaseApp<Self>) -> Result<()> {
         Ok(())
     }
 
@@ -81,6 +69,8 @@ impl App for Triangle {
         );
         buffer.bind_graphics_pipeline(&self.pipeline);
         buffer.bind_vertex_buffer(&self.vertex_buffer);
+        buffer.set_viewport(base.swapchain.extent);
+        buffer.set_scissor(base.swapchain.extent);
         buffer.draw(3);
         buffer.end_rendering();
 
@@ -147,7 +137,6 @@ fn create_vertex_buffer(context: &VkContext) -> Result<VkBuffer> {
 fn create_pipeline(
     context: &VkContext,
     layout: &VkPipelineLayout,
-    extent: vk::Extent2D,
     color_attachment_format: vk::Format,
 ) -> Result<VkGraphicsPipeline> {
     context.create_graphics_pipeline::<Vertex>(
@@ -164,9 +153,10 @@ fn create_pipeline(
                 },
             ],
             primitive_topology: vk::PrimitiveTopology::TRIANGLE_LIST,
-            extent,
+            extent: None,
             color_attachment_format,
             color_attachment_blend: None,
+            dynamic_states: Some(&[vk::DynamicState::SCISSOR, vk::DynamicState::VIEWPORT]),
         },
     )
 }

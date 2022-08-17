@@ -14,9 +14,10 @@ pub struct VkGraphicsPipeline {
 pub struct VkGraphicsPipelineCreateInfo<'a> {
     pub shaders: &'a [VkGraphicsShaderCreateInfo<'a>],
     pub primitive_topology: vk::PrimitiveTopology,
-    pub extent: vk::Extent2D,
+    pub extent: Option<vk::Extent2D>,
     pub color_attachment_format: vk::Format,
     pub color_attachment_blend: Option<vk::PipelineColorBlendAttachmentState>,
+    pub dynamic_states: Option<&'a [vk::DynamicState]>,
 }
 
 pub trait Vertex {
@@ -36,6 +37,7 @@ impl VkGraphicsPipeline {
         layout: &VkPipelineLayout,
         create_info: VkGraphicsPipelineCreateInfo,
     ) -> Result<Self> {
+        // shaders
         let mut shader_modules = vec![];
         let mut shader_stages_infos = vec![];
 
@@ -54,6 +56,7 @@ impl VkGraphicsPipeline {
             shader_stages_infos.push(stage);
         }
 
+        // vertex
         let vertex_bindings = V::bindings();
         let vertex_attributes = V::attributes();
         let vertex_input_info = vk::PipelineVertexInputStateCreateInfo::builder()
@@ -64,22 +67,35 @@ impl VkGraphicsPipeline {
             .topology(create_info.primitive_topology)
             .primitive_restart_enable(false);
 
-        let viewports = [vk::Viewport {
-            x: 0.0,
-            y: 0.0,
-            width: create_info.extent.width as _,
-            height: create_info.extent.height as _,
-            min_depth: 0.0,
-            max_depth: 1.0,
-        }];
-        let scissors = [vk::Rect2D {
-            offset: vk::Offset2D { x: 0, y: 0 },
-            extent: create_info.extent,
-        }];
+        // viewport/scissors
+        let viewports = create_info
+            .extent
+            .map(|e| {
+                vec![vk::Viewport {
+                    x: 0.0,
+                    y: 0.0,
+                    width: e.width as _,
+                    height: e.height as _,
+                    min_depth: 0.0,
+                    max_depth: 1.0,
+                }]
+            })
+            .unwrap_or_default();
+        let scissors = create_info
+            .extent
+            .map(|e| {
+                vec![vk::Rect2D {
+                    offset: vk::Offset2D { x: 0, y: 0 },
+                    extent: e,
+                }]
+            })
+            .unwrap_or_default();
+
         let viewport_info = vk::PipelineViewportStateCreateInfo::builder()
             .viewports(&viewports)
             .scissors(&scissors);
 
+        // raster
         let rasterizer_info = vk::PipelineRasterizationStateCreateInfo::builder()
             .depth_clamp_enable(false)
             .rasterizer_discard_enable(false)
@@ -92,6 +108,7 @@ impl VkGraphicsPipeline {
             .depth_bias_clamp(0.0)
             .depth_bias_slope_factor(0.0);
 
+        // msaa
         let multisampling_info = vk::PipelineMultisampleStateCreateInfo::builder()
             .sample_shading_enable(false)
             .rasterization_samples(vk::SampleCountFlags::TYPE_1)
@@ -99,6 +116,7 @@ impl VkGraphicsPipeline {
             .alpha_to_coverage_enable(false)
             .alpha_to_one_enable(false);
 
+        // blending
         let color_blend_attachment =
             create_info
                 .color_attachment_blend
@@ -113,6 +131,11 @@ impl VkGraphicsPipeline {
             .attachments(&color_blend_attachments)
             .blend_constants([0.0, 0.0, 0.0, 0.0]);
 
+        // dynamic states
+        let dynamic_state_info = vk::PipelineDynamicStateCreateInfo::builder()
+            .dynamic_states(create_info.dynamic_states.unwrap_or(&[]));
+
+        // dynamic rendering
         let color_attachment_formats = [create_info.color_attachment_format];
         let mut rendering_info = vk::PipelineRenderingCreateInfo::builder()
             .color_attachment_formats(&color_attachment_formats);
@@ -125,6 +148,7 @@ impl VkGraphicsPipeline {
             .rasterization_state(&rasterizer_info)
             .multisample_state(&multisampling_info)
             .color_blend_state(&color_blending_info)
+            .dynamic_state(&dynamic_state_info)
             .layout(layout.inner)
             .push_next(&mut rendering_info);
 

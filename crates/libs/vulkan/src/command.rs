@@ -416,6 +416,34 @@ impl VkCommandBuffer {
     pub fn end_rendering(&self) {
         unsafe { self.device.inner.cmd_end_rendering(self.inner) };
     }
+
+    pub fn set_viewport(&self, extent: vk::Extent2D) {
+        unsafe {
+            self.device.inner.cmd_set_viewport(
+                self.inner,
+                0,
+                &[vk::Viewport {
+                    width: extent.width as _,
+                    height: extent.height as _,
+                    max_depth: 1.0,
+                    ..Default::default()
+                }],
+            )
+        };
+    }
+
+    pub fn set_scissor(&self, extent: vk::Extent2D) {
+        unsafe {
+            self.device.inner.cmd_set_scissor(
+                self.inner,
+                0,
+                &[vk::Rect2D {
+                    extent,
+                    ..Default::default()
+                }],
+            )
+        };
+    }
 }
 
 #[derive(Clone, Copy)]
