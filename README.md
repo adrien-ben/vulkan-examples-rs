@@ -34,6 +34,8 @@ For examples with interactive camera you can move the camera with
 - Ctrl and space to go up or down
 - Right-click and move the mouse around to look
 
+Also you can toggle the stats window by pressing R.
+
 ## Requirements
 
 All examples use Vulkan 1.3 and the following features:

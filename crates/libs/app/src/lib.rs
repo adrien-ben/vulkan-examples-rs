@@ -23,7 +23,7 @@ use std::{
 use vulkan::*;
 use winit::{
     dpi::PhysicalSize,
-    event::{Event, WindowEvent},
+    event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
@@ -41,6 +41,7 @@ pub struct BaseApp<B: App> {
     in_flight_frames: InFlightFrames,
     pub context: VkContext,
     pub camera: Camera,
+    display_stats: bool,
 }
 
 pub trait App: Sized {
@@ -120,11 +121,11 @@ pub fn run<A: App + 'static>(
         &window,
         IN_FLIGHT_FRAMES as _,
     )?;
-    let mut controls = Controls::default();
 
+    let mut controls = Controls::default();
     let mut is_swapchain_dirty = false;
     let mut last_frame = Instant::now();
-    let mut delta_time = Duration::ZERO;
+    let mut frame_stats = FrameStats::default();
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -137,11 +138,13 @@ pub fn run<A: App + 'static>(
         match event {
             Event::NewEvents(_) => {
                 let now = Instant::now();
-                delta_time = now - last_frame;
+                let delta_time = now - last_frame;
                 gui_context.update_delta_time(delta_time);
                 last_frame = now;
 
                 controls = controls.reset();
+
+                frame_stats = frame_stats.update(delta_time);
             }
             // On resize
             Event::WindowEvent {
@@ -166,11 +169,29 @@ pub fn run<A: App + 'static>(
                     }
                 }
 
-                base_app.camera = base_app.camera.update(&controls, delta_time);
+                base_app.camera = base_app.camera.update(&controls, frame_stats.frame_time);
 
                 is_swapchain_dirty = base_app
-                    .draw(&window, app, &mut gui_context, &mut ui, delta_time)
+                    .draw(&window, app, &mut gui_context, &mut ui, &frame_stats)
                     .expect("Failed to tick");
+            }
+            // Keyboard
+            Event::WindowEvent {
+                event:
+                    WindowEvent::KeyboardInput {
+                        input:
+                            KeyboardInput {
+                                state,
+                                virtual_keycode: Some(key_code),
+                                ..
+                            },
+                        ..
+                    },
+                ..
+            } => {
+                if key_code == VirtualKeyCode::R && state == ElementState::Pressed {
+                    base_app.toggle_stats();
+                }
             }
             // Exit app on request to close window
             Event::WindowEvent {
@@ -259,6 +280,7 @@ impl<B: App> BaseApp<B> {
             command_buffers,
             in_flight_frames,
             camera,
+            display_stats: true,
         })
     }
 
@@ -296,16 +318,32 @@ impl<B: App> BaseApp<B> {
         base_app: &mut B,
         gui_context: &mut GuiContext,
         gui: &mut B::Gui,
-        delta_time: Duration,
+        frame_stats: &FrameStats,
     ) -> Result<bool> {
         // Generate UI
-
         gui_context
             .platform
             .prepare_frame(gui_context.imgui.io_mut(), window)?;
         let ui = gui_context.imgui.frame();
 
         gui.build(&ui);
+
+        if self.display_stats {
+            gui::imgui::Window::new("Frame stats")
+                .focus_on_appearing(false)
+                .no_decoration()
+                .bg_alpha(0.5)
+                .position(
+                    [self.swapchain.extent.width as f32 - 125.0, 5.0],
+                    gui::imgui::Condition::Always,
+                )
+                .size([120.0, 80.0], gui::imgui::Condition::FirstUseEver)
+                .build(&ui, || {
+                    ui.text("\"R\" to toggle");
+                    ui.label_text("fps", frame_stats.fps_counter.to_string());
+                    ui.label_text("ms", frame_stats.frame_time.as_secs_f32().to_string());
+                });
+        }
 
         gui_context.platform.prepare_render(&ui, window);
         let draw_data = ui.render();
@@ -326,7 +364,7 @@ impl<B: App> BaseApp<B> {
             },
         };
 
-        base_app.update(self, gui, image_index, delta_time)?;
+        base_app.update(self, gui, image_index, frame_stats.frame_time)?;
 
         self.in_flight_frames.fence().reset()?;
 
@@ -482,6 +520,10 @@ impl<B: App> BaseApp<B> {
 
         Ok(())
     }
+
+    fn toggle_stats(&mut self) {
+        self.display_stats = !self.display_stats;
+    }
 }
 
 fn create_storage_images(
@@ -580,5 +622,34 @@ impl InFlightFrames {
 
     fn fence(&self) -> &VkFence {
         &self.sync_objects[self.current_frame].fence
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct FrameStats {
+    frame_time: Duration,
+    frame_count: u32,
+    fps_counter: u32,
+    timer: f32,
+}
+
+impl FrameStats {
+    fn update(self, frame_time: Duration) -> Self {
+        let mut frame_count = self.frame_count + 1;
+        let mut fps_counter = self.fps_counter;
+        let mut timer = self.timer + frame_time.as_secs_f32();
+
+        if timer > 1.0 {
+            fps_counter = frame_count;
+            frame_count = 0;
+            timer -= 1.0;
+        }
+
+        Self {
+            frame_time,
+            frame_count,
+            fps_counter,
+            timer,
+        }
     }
 }
