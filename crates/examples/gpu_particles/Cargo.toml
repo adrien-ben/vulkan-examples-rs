@@ -9,3 +9,4 @@ edition = "2021"
 app = { path = "../../libs/app" }
 gui = { path = "../../libs/gui" }
 rand = "0.8"
+num_cpus = "1.13"

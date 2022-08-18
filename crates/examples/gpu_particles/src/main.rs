@@ -1,5 +1,5 @@
 use std::mem::size_of;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use app::anyhow::Result;
 use app::glam::{vec3, Mat4};
@@ -21,7 +21,7 @@ const HEIGHT: u32 = 576;
 const APP_NAME: &str = "GPU Particles";
 
 const DISPATCH_GROUP_SIZE_X: u32 = 256;
-const MAX_PARTICLE_COUNT: u32 = DISPATCH_GROUP_SIZE_X * 4048;
+const MAX_PARTICLE_COUNT: u32 = DISPATCH_GROUP_SIZE_X * 32_768; // 8M particles
 const MIN_PARTICLE_SIZE: f32 = 1.0;
 const MAX_PARTICLE_SIZE: f32 = 3.0;
 const MIN_ATTRACTOR_STRENGTH: u32 = 0;
@@ -283,7 +283,7 @@ struct Gui {
 impl app::Gui for Gui {
     fn new() -> Result<Self> {
         Ok(Gui {
-            particle_count: MAX_PARTICLE_COUNT / 10,
+            particle_count: MAX_PARTICLE_COUNT / 20,
             particle_size: MIN_PARTICLE_SIZE,
             attractor_position: [0.0; 3],
             new_attractor_position: None,
@@ -404,34 +404,67 @@ impl Vertex for Particle {
 }
 
 fn create_particle_buffer(context: &VkContext) -> Result<VkBuffer> {
-    let mut rng = rand::thread_rng();
-    let mut particles = Vec::with_capacity(MAX_PARTICLE_COUNT as usize);
-    for _ in 0..MAX_PARTICLE_COUNT {
-        let p = vec3(
-            rng.gen_range(-1.0..1.0f32),
-            rng.gen_range(-1.0..1.0f32),
-            rng.gen_range(-1.0..1.0f32),
-        )
-        .normalize()
-            * rng.gen_range(0.1..1.0f32);
+    let start = Instant::now();
 
-        particles.push(Particle {
-            position: [p.x, p.y, p.z, 0.0],
-            velocity: [
-                rng.gen_range(-1.0..1.0f32),
-                rng.gen_range(-1.0..1.0f32),
-                rng.gen_range(-1.0..1.0f32),
-                0.0,
-            ],
-            color: [1.0, 1.0, 1.0, 1.0],
-        });
+    let num_cpus = num_cpus::get();
+    let particles_per_cpu = (MAX_PARTICLE_COUNT as f32 / num_cpus as f32).ceil() as usize;
+    let remaining = MAX_PARTICLE_COUNT as usize % particles_per_cpu;
+
+    let mut handles = vec![];
+    for i in 0..num_cpus {
+        handles.push(std::thread::spawn(move || {
+            let mut rng = rand::thread_rng();
+
+            let particle_count = if i == num_cpus - 1 && remaining != 0 {
+                remaining
+            } else {
+                particles_per_cpu
+            };
+
+            let mut particles = Vec::with_capacity(particle_count);
+
+            for _ in 0..particle_count {
+                let p = vec3(
+                    rng.gen_range(-1.0..1.0f32),
+                    rng.gen_range(-1.0..1.0f32),
+                    rng.gen_range(-1.0..1.0f32),
+                )
+                .normalize()
+                    * rng.gen_range(0.1..1.0f32);
+
+                particles.push(Particle {
+                    position: [p.x, p.y, p.z, 0.0],
+                    velocity: [
+                        rng.gen_range(-1.0..1.0f32),
+                        rng.gen_range(-1.0..1.0f32),
+                        rng.gen_range(-1.0..1.0f32),
+                        0.0,
+                    ],
+                    color: [1.0, 1.0, 1.0, 1.0],
+                });
+            }
+
+            particles
+        }));
     }
+
+    let particles = handles
+        .into_iter()
+        .map(|h| h.join())
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .unwrap()
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
 
     let vertex_buffer = create_gpu_only_buffer_from_data(
         context,
         vk::BufferUsageFlags::VERTEX_BUFFER | vk::BufferUsageFlags::STORAGE_BUFFER,
         &particles,
     )?;
+
+    let time = Instant::now() - start;
+    app::log::info!("Generated particles in {time:?}");
 
     Ok(vertex_buffer)
 }
