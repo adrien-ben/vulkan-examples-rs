@@ -2,7 +2,7 @@ use std::mem::size_of;
 use std::time::Duration;
 
 use app::anyhow::Result;
-use app::glam::Mat4;
+use app::glam::{vec3, Mat4};
 use app::vulkan::ash::vk;
 use app::vulkan::gpu_allocator::MemoryLocation;
 use app::vulkan::utils::create_gpu_only_buffer_from_data;
@@ -371,8 +371,8 @@ struct GraphicsUbo {
 struct Particle {
     // position 0, 1, 2 - pad 3
     position: [f32; 4],
-    // direction 0, 1, 2 - pad 3
-    direction: [f32; 4],
+    // velocity 0, 1, 2 - pad 3
+    velocity: [f32; 4],
     color: [f32; 4],
 }
 
@@ -407,14 +407,17 @@ fn create_particle_buffer(context: &VkContext) -> Result<VkBuffer> {
     let mut rng = rand::thread_rng();
     let mut particles = Vec::with_capacity(MAX_PARTICLE_COUNT as usize);
     for _ in 0..MAX_PARTICLE_COUNT {
+        let p = vec3(
+            rng.gen_range(-1.0..1.0f32),
+            rng.gen_range(-1.0..1.0f32),
+            rng.gen_range(-1.0..1.0f32),
+        )
+        .normalize()
+            * rng.gen_range(0.1..1.0f32);
+
         particles.push(Particle {
-            position: [
-                rng.gen_range(-1.0..1.0f32),
-                rng.gen_range(-1.0..1.0f32),
-                rng.gen_range(-1.0..1.0f32),
-                0.0,
-            ],
-            direction: [
+            position: [p.x, p.y, p.z, 0.0],
+            velocity: [
                 rng.gen_range(-1.0..1.0f32),
                 rng.gen_range(-1.0..1.0f32),
                 rng.gen_range(-1.0..1.0f32),

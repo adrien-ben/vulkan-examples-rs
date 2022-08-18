@@ -1,8 +1,8 @@
 #version 450
 
 struct Particle {
-  vec4 position;
-  vec4 direction;
+  vec3 position;
+  vec3 velocity;
   vec3 color;
 };
 
@@ -11,8 +11,8 @@ layout(std430, binding = 0) buffer Buffer {
 };
 
 layout(binding = 1) uniform Ubo {
-  vec4 attractorCenter;
-  vec4 particle_colors[3];
+  vec3 attractorCenter;
+  vec3 particle_colors[3];
   uint attractorStrength;
   uint particleCount;
   float elasped;
@@ -35,24 +35,24 @@ void main() {
 
     // Read particle attribute
     vec3 position = particles[index].position.xyz;
-    vec3 direction = normalize(particles[index].direction.xyz);
+    vec3 velocity = normalize(particles[index].velocity);
 
     const vec3 MAX_SPEED = vec3(100.0);
 
     // compute velocity
-    float distanceToMass = length(ubo.attractorCenter.xyz - position);
+    float distanceToMass = length(ubo.attractorCenter - position);
     float speedFactor = rand(gl_GlobalInvocationID.xx) * 0.2 + 0.8;
-    vec3 toMass = normalize(ubo.attractorCenter.xyz - position) * distanceToMass * ubo.elasped * ubo.attractorStrength * speedFactor;
-    direction = clamp(direction + toMass, -MAX_SPEED, MAX_SPEED);
+    vec3 toMass = normalize(ubo.attractorCenter - position) * distanceToMass * ubo.elasped * ubo.attractorStrength * speedFactor;
+    velocity = clamp(velocity + toMass, -MAX_SPEED, MAX_SPEED);
 
     // Move by velocity
-    position += direction * ubo.elasped;
+    position += velocity * ubo.elasped;
 
     // choose particle color
     uint color_index = uint(floor(rand(gl_GlobalInvocationID.xx / 100.0) * 3.0));
 
     // Write back
-    particles[index].position.xyz = position;
-    particles[index].direction.xyz = direction;
-    particles[index].color = ubo.particle_colors[color_index].rgb;
+    particles[index].position = position;
+    particles[index].velocity = velocity;
+    particles[index].color = ubo.particle_colors[color_index];
 }
