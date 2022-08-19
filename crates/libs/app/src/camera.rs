@@ -1,13 +1,10 @@
 use std::time::Duration;
 
 use glam::{vec3, Mat3, Mat4, Quat, Vec3};
-use winit::{
-    dpi::PhysicalPosition,
-    event::{ElementState, Event, KeyboardInput, MouseButton, WindowEvent},
-};
+use winit::event::{DeviceEvent, ElementState, Event, KeyboardInput, MouseButton, WindowEvent};
 
 const MOVE_SPEED: f32 = 3.0;
-const ANGLE_PER_POINT: f32 = 0.7;
+const ANGLE_PER_POINT: f32 = 0.001745;
 
 const FORWARD_SCANCODE: u32 = 17;
 const BACKWARD_SCANCODE: u32 = 31;
@@ -53,12 +50,8 @@ impl Camera {
 
         // Update direction
         let new_direction = if controls.look_around {
-            let side_rot = Quat::from_axis_angle(
-                side,
-                -controls.cursor_delta[1] * ANGLE_PER_POINT * delta_time,
-            );
-            let y_rot =
-                Quat::from_rotation_y(-controls.cursor_delta[0] * ANGLE_PER_POINT * delta_time);
+            let side_rot = Quat::from_axis_angle(side, -controls.cursor_delta[1] * ANGLE_PER_POINT);
+            let y_rot = Quat::from_rotation_y(-controls.cursor_delta[0] * ANGLE_PER_POINT);
             let rot = Mat3::from_quat(side_rot * y_rot);
 
             (rot * self.direction).normalize()
@@ -161,7 +154,6 @@ pub struct Controls {
     pub go_up: bool,
     pub go_down: bool,
     pub look_around: bool,
-    cursor_position: [f32; 2],
     pub cursor_delta: [f32; 2],
 }
 
@@ -175,7 +167,6 @@ impl Default for Controls {
             go_up: false,
             go_down: false,
             look_around: false,
-            cursor_position: [-1.0, -1.0],
             cursor_delta: [0.0; 2],
         }
     }
@@ -192,58 +183,52 @@ impl Controls {
     pub fn handle_event(self, event: &Event<()>) -> Self {
         let mut new_state = self;
 
-        if let Event::WindowEvent { event, .. } = event {
-            match event {
-                WindowEvent::KeyboardInput {
-                    input:
-                        KeyboardInput {
-                            scancode, state, ..
-                        },
-                    ..
-                } => {
-                    if *scancode == FORWARD_SCANCODE {
-                        new_state.go_forward = *state == ElementState::Pressed;
+        match event {
+            Event::WindowEvent { event, .. } => {
+                match event {
+                    WindowEvent::KeyboardInput {
+                        input:
+                            KeyboardInput {
+                                scancode, state, ..
+                            },
+                        ..
+                    } => {
+                        if *scancode == FORWARD_SCANCODE {
+                            new_state.go_forward = *state == ElementState::Pressed;
+                        }
+                        if *scancode == BACKWARD_SCANCODE {
+                            new_state.go_backward = *state == ElementState::Pressed;
+                        }
+                        if *scancode == RIGHT_SCANCODE {
+                            new_state.strafe_right = *state == ElementState::Pressed;
+                        }
+                        if *scancode == LEFT_SCANCODE {
+                            new_state.strafe_left = *state == ElementState::Pressed;
+                        }
+                        if *scancode == UP_SCANCODE {
+                            new_state.go_up = *state == ElementState::Pressed;
+                        }
+                        if *scancode == DOWN_SCANCODE {
+                            new_state.go_down = *state == ElementState::Pressed;
+                        }
                     }
-                    if *scancode == BACKWARD_SCANCODE {
-                        new_state.go_backward = *state == ElementState::Pressed;
+                    WindowEvent::MouseInput { state, button, .. } => {
+                        if *button == MouseButton::Right {
+                            new_state.look_around = *state == ElementState::Pressed;
+                        }
                     }
-                    if *scancode == RIGHT_SCANCODE {
-                        new_state.strafe_right = *state == ElementState::Pressed;
-                    }
-                    if *scancode == LEFT_SCANCODE {
-                        new_state.strafe_left = *state == ElementState::Pressed;
-                    }
-                    if *scancode == UP_SCANCODE {
-                        new_state.go_up = *state == ElementState::Pressed;
-                    }
-                    if *scancode == DOWN_SCANCODE {
-                        new_state.go_down = *state == ElementState::Pressed;
-                    }
-                }
-                WindowEvent::MouseInput { state, button, .. } => {
-                    if *button == MouseButton::Right {
-                        new_state.look_around = *state == ElementState::Pressed;
-                    }
-                }
-                WindowEvent::CursorMoved {
-                    position: PhysicalPosition { x, y },
-                    ..
-                } => {
-                    let x = *x as f32;
-                    let y = *y as f32;
-
-                    new_state.cursor_delta = if self.cursor_position == [-1.0, 1.0] {
-                        [0.0, 0.0]
-                    } else {
-                        [
-                            self.cursor_delta[0] + (x - self.cursor_position[0]) as f32,
-                            self.cursor_delta[1] + (y - self.cursor_position[1]) as f32,
-                        ]
-                    };
-                    new_state.cursor_position = [x, y];
-                }
-                _ => {}
-            };
+                    _ => {}
+                };
+            }
+            Event::DeviceEvent {
+                event: DeviceEvent::MouseMotion { delta: (x, y) },
+                ..
+            } => {
+                let x = *x as f32;
+                let y = *y as f32;
+                new_state.cursor_delta = [self.cursor_delta[0] + x, self.cursor_delta[1] + y];
+            }
+            _ => (),
         }
 
         new_state

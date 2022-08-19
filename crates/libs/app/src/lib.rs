@@ -23,7 +23,7 @@ use std::{
 use vulkan::*;
 use winit::{
     dpi::PhysicalSize,
-    event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+    event::{ElementState, Event, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
@@ -191,6 +191,19 @@ pub fn run<A: App + 'static>(
             } => {
                 if key_code == VirtualKeyCode::R && state == ElementState::Pressed {
                     base_app.toggle_stats();
+                }
+            }
+            // Mouse
+            Event::WindowEvent {
+                event: WindowEvent::MouseInput { state, button, .. },
+                ..
+            } => {
+                if button == MouseButton::Right {
+                    if state == ElementState::Pressed {
+                        window.set_cursor_visible(false);
+                    } else {
+                        window.set_cursor_visible(true);
+                    }
                 }
             }
             // Exit app on request to close window
