@@ -19,7 +19,7 @@ impl VkDevice {
         physical_device: &VkPhysicalDevice,
         queue_families: &[VkQueueFamily],
         required_extensions: &[&str],
-        enable_ray_tracing: bool,
+        device_features: &VkDeviceFeatures,
     ) -> Result<Self> {
         let queue_priorities = [1.0f32];
 
@@ -48,16 +48,16 @@ impl VkDevice {
             .collect::<Vec<_>>();
 
         let mut ray_tracing_feature = vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::builder()
-            .ray_tracing_pipeline(enable_ray_tracing);
+            .ray_tracing_pipeline(device_features.ray_tracing_pipeline);
         let mut acceleration_struct_feature =
             vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder()
-                .acceleration_structure(enable_ray_tracing);
+                .acceleration_structure(device_features.acceleration_structure);
         let mut vulkan_12_features = vk::PhysicalDeviceVulkan12Features::builder()
-            .runtime_descriptor_array(enable_ray_tracing)
-            .buffer_device_address(enable_ray_tracing);
+            .runtime_descriptor_array(device_features.runtime_descriptor_array)
+            .buffer_device_address(device_features.buffer_device_address);
         let mut vulkan_13_features = vk::PhysicalDeviceVulkan13Features::builder()
-            .dynamic_rendering(true)
-            .synchronization2(true);
+            .dynamic_rendering(device_features.dynamic_rendering)
+            .synchronization2(device_features.synchronization2);
 
         let mut features = vk::PhysicalDeviceFeatures2::builder()
             .features(vk::PhysicalDeviceFeatures::default())
@@ -91,5 +91,26 @@ impl Drop for VkDevice {
         unsafe {
             self.inner.destroy_device(None);
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct VkDeviceFeatures {
+    pub ray_tracing_pipeline: bool,
+    pub acceleration_structure: bool,
+    pub runtime_descriptor_array: bool,
+    pub buffer_device_address: bool,
+    pub dynamic_rendering: bool,
+    pub synchronization2: bool,
+}
+
+impl VkDeviceFeatures {
+    pub fn is_compatible_with(&self, requirements: &Self) -> bool {
+        (!requirements.ray_tracing_pipeline || self.ray_tracing_pipeline)
+            && (!requirements.acceleration_structure || self.acceleration_structure)
+            && (!requirements.runtime_descriptor_array || self.runtime_descriptor_array)
+            && (!requirements.buffer_device_address || self.buffer_device_address)
+            && (!requirements.dynamic_rendering || self.dynamic_rendering)
+            && (!requirements.synchronization2 || self.synchronization2)
     }
 }

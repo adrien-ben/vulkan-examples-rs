@@ -9,12 +9,12 @@ use gpu_allocator::{
 use raw_window_handle::HasRawWindowHandle;
 
 use crate::{
-    device::VkDevice,
+    device::{VkDevice, VkDeviceFeatures},
     instance::VkInstance,
     physical_device::VkPhysicalDevice,
     queue::{VkQueue, VkQueueFamily},
     surface::VkSurface,
-    VkCommandBuffer, VkCommandPool, VkRayTracingContext, VkVersion,
+    VkCommandBuffer, VkCommandPool, VkRayTracingContext, VkVersion, VERSION_1_0,
 };
 
 pub struct VkContext {
@@ -32,34 +32,88 @@ pub struct VkContext {
     _entry: Entry,
 }
 
+pub struct VkContextBuilder<'a> {
+    window: &'a dyn HasRawWindowHandle,
+    vulkan_version: VkVersion,
+    app_name: &'a str,
+    required_extensions: &'a [&'a str],
+    required_device_features: VkDeviceFeatures,
+    with_raytracing_context: bool,
+}
+
+impl<'a> VkContextBuilder<'a> {
+    pub fn new(window: &'a dyn HasRawWindowHandle) -> Self {
+        Self {
+            window,
+            vulkan_version: VERSION_1_0,
+            app_name: "",
+            required_extensions: &[],
+            required_device_features: Default::default(),
+            with_raytracing_context: false,
+        }
+    }
+
+    pub fn vulkan_version(self, vulkan_version: VkVersion) -> Self {
+        Self {
+            vulkan_version,
+            ..self
+        }
+    }
+
+    pub fn app_name(self, app_name: &'a str) -> Self {
+        Self { app_name, ..self }
+    }
+
+    pub fn required_extensions(self, required_extensions: &'a [&str]) -> Self {
+        Self {
+            required_extensions,
+            ..self
+        }
+    }
+
+    pub fn required_device_features(self, required_device_features: VkDeviceFeatures) -> Self {
+        Self {
+            required_device_features,
+            ..self
+        }
+    }
+
+    pub fn with_raytracing_context(self, with_raytracing_context: bool) -> Self {
+        Self {
+            with_raytracing_context,
+            ..self
+        }
+    }
+
+    pub fn build(self) -> Result<VkContext> {
+        VkContext::new(self)
+    }
+}
+
 impl VkContext {
-    pub fn new(
-        window: &dyn HasRawWindowHandle,
-        api_version: VkVersion,
-        app_name: Option<&str>,
-        required_extensions: &[&str],
-        enable_raytracing: bool,
+    fn new(
+        VkContextBuilder {
+            window,
+            vulkan_version,
+            app_name,
+            required_extensions,
+            required_device_features,
+            with_raytracing_context,
+        }: VkContextBuilder,
     ) -> Result<Self> {
         // Vulkan instance
         let entry = Entry::linked();
-        let mut instance = VkInstance::new(&entry, window, api_version, app_name)?;
+        let mut instance = VkInstance::new(&entry, window, vulkan_version, app_name)?;
 
         // Vulkan surface
         let surface = VkSurface::new(&entry, &instance, &window)?;
-
-        let mut required_extensions = Vec::from(required_extensions);
-        if enable_raytracing {
-            required_extensions.push("VK_KHR_ray_tracing_pipeline");
-            required_extensions.push("VK_KHR_acceleration_structure");
-            required_extensions.push("VK_KHR_deferred_host_operations");
-        }
 
         let physical_devices = instance.enumerate_physical_devices(&surface)?;
         let (physical_device, graphics_queue_family, present_queue_family) =
             select_suitable_physical_device(
                 physical_devices,
-                &required_extensions,
-                enable_raytracing,
+                required_extensions,
+                &required_device_features,
             )?;
         log::info!("Selected physical device: {:?}", physical_device.name);
 
@@ -68,13 +122,13 @@ impl VkContext {
             &instance,
             &physical_device,
             &queue_families,
-            &required_extensions,
-            enable_raytracing,
+            required_extensions,
+            &required_device_features,
         )?);
         let graphics_queue = device.get_queue(graphics_queue_family, 0);
         let present_queue = device.get_queue(present_queue_family, 0);
 
-        let ray_tracing = if enable_raytracing {
+        let ray_tracing = with_raytracing_context.then(|| {
             let ray_tracing = Arc::new(VkRayTracingContext::new(
                 &instance,
                 &physical_device,
@@ -88,11 +142,8 @@ impl VkContext {
                 "Acceleration structure properties {:#?}",
                 ray_tracing.acceleration_structure_properties
             );
-
-            Some(ray_tracing)
-        } else {
-            None
-        };
+            ray_tracing
+        });
 
         let command_pool = VkCommandPool::new(
             device.clone(),
@@ -111,7 +162,7 @@ impl VkContext {
                 log_frees: true,
                 ..Default::default()
             },
-            buffer_device_address: enable_raytracing,
+            buffer_device_address: required_device_features.buffer_device_address,
         })?;
 
         Ok(Self {
@@ -134,7 +185,7 @@ impl VkContext {
 fn select_suitable_physical_device(
     devices: &[VkPhysicalDevice],
     required_extensions: &[&str],
-    enable_raytracing: bool,
+    required_device_features: &VkDeviceFeatures,
 ) -> Result<(VkPhysicalDevice, VkQueueFamily, VkQueueFamily)> {
     log::debug!("Choosing Vulkan physical device");
 
@@ -167,9 +218,9 @@ fn select_suitable_physical_device(
                 && extention_support
                 && !device.supported_surface_formats.is_empty()
                 && !device.supported_present_modes.is_empty()
-                && (device.supports_ray_tracing || !enable_raytracing)
-                && device.supports_dynamic_rendering
-                && device.supports_synchronization2
+                && device
+                    .supported_device_features
+                    .is_compatible_with(required_device_features)
         })
         .ok_or_else(|| anyhow::anyhow!("Could not find a suitable device"))?;
 

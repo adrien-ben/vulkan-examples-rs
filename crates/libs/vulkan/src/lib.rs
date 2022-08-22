@@ -24,6 +24,7 @@ pub use buffer::*;
 pub use command::*;
 pub use context::*;
 pub use descriptor::*;
+pub use device::*;
 pub use image::*;
 pub use pipeline::*;
 pub use queue::*;
@@ -31,6 +32,11 @@ pub use ray_tracing::*;
 pub use sampler::*;
 pub use swapchain::*;
 pub use sync::*;
+
+pub const VERSION_1_0: VkVersion = VkVersion::from_major_minor(1, 0);
+pub const VERSION_1_1: VkVersion = VkVersion::from_major_minor(1, 1);
+pub const VERSION_1_2: VkVersion = VkVersion::from_major_minor(1, 2);
+pub const VERSION_1_3: VkVersion = VkVersion::from_major_minor(1, 3);
 
 #[derive(Debug, Clone, Copy)]
 pub struct VkVersion {

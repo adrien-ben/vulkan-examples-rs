@@ -29,7 +29,6 @@ use winit::{
 };
 
 const IN_FLIGHT_FRAMES: u32 = 2;
-const VULKAN_VERSION: VkVersion = VkVersion::from_major_minor(1, 3);
 
 pub struct BaseApp<B: App> {
     phantom: PhantomData<B>,
@@ -238,15 +237,27 @@ impl<B: App> BaseApp<B> {
         log::info!("Create application");
 
         // Vulkan context
-        let required_extensions = ["VK_KHR_swapchain"];
+        let mut required_extensions = vec!["VK_KHR_swapchain"];
+        if enable_raytracing {
+            required_extensions.push("VK_KHR_ray_tracing_pipeline");
+            required_extensions.push("VK_KHR_acceleration_structure");
+            required_extensions.push("VK_KHR_deferred_host_operations");
+        }
 
-        let mut context = VkContext::new(
-            window,
-            VULKAN_VERSION,
-            Some(app_name),
-            &required_extensions,
-            enable_raytracing,
-        )?;
+        let mut context = VkContextBuilder::new(window)
+            .vulkan_version(VERSION_1_3)
+            .app_name(app_name)
+            .required_extensions(&required_extensions)
+            .required_device_features(VkDeviceFeatures {
+                ray_tracing_pipeline: enable_raytracing,
+                acceleration_structure: enable_raytracing,
+                runtime_descriptor_array: enable_raytracing,
+                buffer_device_address: enable_raytracing,
+                dynamic_rendering: true,
+                synchronization2: true,
+            })
+            .with_raytracing_context(enable_raytracing)
+            .build()?;
 
         let command_pool = context.create_command_pool(
             context.graphics_queue_family,

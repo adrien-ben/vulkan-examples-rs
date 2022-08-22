@@ -18,10 +18,9 @@ impl VkInstance {
         entry: &Entry,
         window: &dyn HasRawWindowHandle,
         api_version: VkVersion,
-        app_name: Option<&str>,
+        app_name: &str,
     ) -> Result<Self> {
         // Vulkan instance
-        let app_name = app_name.unwrap_or("no name");
         let app_name = CString::new(app_name)?;
 
         let app_info = vk::ApplicationInfo::builder()
