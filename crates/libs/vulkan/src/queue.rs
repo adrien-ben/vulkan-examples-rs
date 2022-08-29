@@ -40,6 +40,10 @@ impl VkQueueFamily {
     pub fn has_queues(&self) -> bool {
         self.inner.queue_count > 0
     }
+
+    pub fn supports_timestamp_queries(&self) -> bool {
+        self.inner.timestamp_valid_bits > 0
+    }
 }
 
 pub struct VkQueue {

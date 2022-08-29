@@ -39,7 +39,7 @@ impl VkPhysicalDevice {
         let queue_families = queue_family_properties
             .into_iter()
             .enumerate()
-            .map(|(index, f)| {
+            .map(|(index, p)| {
                 let present_support = unsafe {
                     surface.inner.get_physical_device_surface_support(
                         inner,
@@ -47,7 +47,8 @@ impl VkPhysicalDevice {
                         surface.surface_khr,
                     )?
                 };
-                Ok(VkQueueFamily::new(index as _, f, present_support))
+
+                Ok(VkQueueFamily::new(index as _, p, present_support))
             })
             .collect::<Result<_>>()?;
 

@@ -6,7 +6,7 @@ use ash::vk;
 use crate::{
     device::VkDevice, VkBuffer, VkComputePipeline, VkContext, VkDescriptorSet, VkGraphicsPipeline,
     VkImage, VkImageView, VkPipelineLayout, VkQueueFamily, VkRTPipeline, VkRayTracingContext,
-    VkShaderBindingTable,
+    VkShaderBindingTable, VkTimestampQueryPool,
 };
 
 pub struct VkCommandPool {
@@ -443,6 +443,32 @@ impl VkCommandBuffer {
                 }],
             )
         };
+    }
+
+    pub fn reset_all_timestamp_queries_from_pool<const C: usize>(
+        &self,
+        pool: &VkTimestampQueryPool<C>,
+    ) {
+        unsafe {
+            self.device
+                .inner
+                .cmd_reset_query_pool(self.inner, pool.inner, 0, C as _);
+        }
+    }
+
+    pub fn write_timestamp<const C: usize>(
+        &self,
+        stage: vk::PipelineStageFlags2,
+        pool: &VkTimestampQueryPool<C>,
+        query_index: u32,
+    ) {
+        assert!(query_index < C as _, "Query index must be < {C}");
+
+        unsafe {
+            self.device
+                .inner
+                .cmd_write_timestamp2(self.inner, stage, pool.inner, query_index)
+        }
     }
 }
 

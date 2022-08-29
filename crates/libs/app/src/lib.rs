@@ -143,7 +143,18 @@ pub fn run<A: App + 'static>(
 
                 controls = controls.reset();
 
-                frame_stats = frame_stats.update(delta_time);
+                // Can't get for gpu time on the first frame or vkGetQueryPoolResults gets stuck
+                // due to VK_QUERY_RESULT_WAIT_BIT
+                let gpu_frame_time = (frame_stats.total_frame_count > 0)
+                    .then(|| {
+                        base_app
+                            .in_flight_frames
+                            .gpu_frame_time_ms()
+                            .expect("Failed to get gpu frame time")
+                    })
+                    .unwrap_or_default();
+
+                frame_stats = frame_stats.update(delta_time, gpu_frame_time);
             }
             // On resize
             Event::WindowEvent {
@@ -168,7 +179,9 @@ pub fn run<A: App + 'static>(
                     }
                 }
 
-                base_app.camera = base_app.camera.update(&controls, frame_stats.frame_time);
+                base_app.camera = base_app
+                    .camera
+                    .update(&controls, frame_stats.cpu_frame_time);
 
                 is_swapchain_dirty = base_app
                     .draw(&window, app, &mut gui_context, &mut ui, &frame_stats)
@@ -358,14 +371,21 @@ impl<B: App> BaseApp<B> {
                 .no_decoration()
                 .bg_alpha(0.5)
                 .position(
-                    [self.swapchain.extent.width as f32 - 125.0, 5.0],
+                    [self.swapchain.extent.width as f32 - 165.0, 5.0],
                     gui::imgui::Condition::Always,
                 )
-                .size([120.0, 80.0], gui::imgui::Condition::FirstUseEver)
+                .size([160.0, 100.0], gui::imgui::Condition::FirstUseEver)
                 .build(&ui, || {
                     ui.text("\"R\" to toggle");
                     ui.label_text("fps", frame_stats.fps_counter.to_string());
-                    ui.label_text("ms", frame_stats.frame_time.as_secs_f32().to_string());
+                    ui.label_text(
+                        "s(cpu)",
+                        frame_stats.cpu_frame_time.as_secs_f32().to_string(),
+                    );
+                    ui.label_text(
+                        "s(gpu)",
+                        frame_stats.gpu_frame_time.as_secs_f32().to_string(),
+                    );
                 });
         }
 
@@ -388,7 +408,7 @@ impl<B: App> BaseApp<B> {
             },
         };
 
-        base_app.update(self, gui, image_index, frame_stats.frame_time)?;
+        base_app.update(self, gui, image_index, frame_stats.cpu_frame_time)?;
 
         self.in_flight_frames.fence().reset()?;
 
@@ -447,6 +467,14 @@ impl<B: App> BaseApp<B> {
         buffer.reset()?;
 
         buffer.begin(None)?;
+
+        buffer.reset_all_timestamp_queries_from_pool(self.in_flight_frames.timing_query_pool());
+
+        buffer.write_timestamp(
+            vk::PipelineStageFlags2::ALL_COMMANDS,
+            self.in_flight_frames.timing_query_pool(),
+            0,
+        );
 
         if self.raytracing_enabled {
             base_app.record_raytracing_commands(self, buffer, image_index)?;
@@ -540,6 +568,12 @@ impl<B: App> BaseApp<B> {
             dst_stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
         }]);
 
+        buffer.write_timestamp(
+            vk::PipelineStageFlags2::ALL_COMMANDS,
+            self.in_flight_frames.timing_query_pool(),
+            1,
+        );
+
         buffer.end()?;
 
         Ok(())
@@ -600,14 +634,15 @@ pub struct ImageAndView {
 }
 
 struct InFlightFrames {
-    sync_objects: Vec<SyncObjects>,
+    per_frames: Vec<PerFrame>,
     current_frame: usize,
 }
 
-struct SyncObjects {
+struct PerFrame {
     image_available_semaphore: VkSemaphore,
     render_finished_semaphore: VkSemaphore,
     fence: VkFence,
+    timing_query_pool: VkTimestampQueryPool<2>,
 }
 
 impl InFlightFrames {
@@ -618,50 +653,67 @@ impl InFlightFrames {
                 let render_finished_semaphore = context.create_semaphore()?;
                 let fence = context.create_fence(Some(vk::FenceCreateFlags::SIGNALED))?;
 
-                Ok(SyncObjects {
+                let timing_query_pool = context.create_timestamp_query_pool()?;
+
+                Ok(PerFrame {
                     image_available_semaphore,
                     render_finished_semaphore,
                     fence,
+                    timing_query_pool,
                 })
             })
             .collect::<Result<Vec<_>>>()?;
 
         Ok(Self {
-            sync_objects,
+            per_frames: sync_objects,
             current_frame: 0,
         })
     }
 
     fn next(&mut self) {
-        self.current_frame = (self.current_frame + 1) % self.sync_objects.len();
+        self.current_frame = (self.current_frame + 1) % self.per_frames.len();
     }
 
     fn image_available_semaphore(&self) -> &VkSemaphore {
-        &self.sync_objects[self.current_frame].image_available_semaphore
+        &self.per_frames[self.current_frame].image_available_semaphore
     }
 
     fn render_finished_semaphore(&self) -> &VkSemaphore {
-        &self.sync_objects[self.current_frame].render_finished_semaphore
+        &self.per_frames[self.current_frame].render_finished_semaphore
     }
 
     fn fence(&self) -> &VkFence {
-        &self.sync_objects[self.current_frame].fence
+        &self.per_frames[self.current_frame].fence
+    }
+
+    fn timing_query_pool(&self) -> &VkTimestampQueryPool<2> {
+        &self.per_frames[self.current_frame].timing_query_pool
+    }
+
+    fn gpu_frame_time_ms(&self) -> Result<Duration> {
+        let result = self.timing_query_pool().wait_for_all_results()?;
+        let time = Duration::from_nanos(result[1].saturating_sub(result[0]));
+
+        Ok(time)
     }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
 struct FrameStats {
-    frame_time: Duration,
+    cpu_frame_time: Duration,
+    gpu_frame_time: Duration,
+    total_frame_count: u32,
     frame_count: u32,
     fps_counter: u32,
     timer: f32,
 }
 
 impl FrameStats {
-    fn update(self, frame_time: Duration) -> Self {
+    fn update(self, cpu_frame_time: Duration, gpu_frame_time: Duration) -> Self {
+        let total_frame_count = self.total_frame_count + 1;
         let mut frame_count = self.frame_count + 1;
         let mut fps_counter = self.fps_counter;
-        let mut timer = self.timer + frame_time.as_secs_f32();
+        let mut timer = self.timer + cpu_frame_time.as_secs_f32();
 
         if timer > 1.0 {
             fps_counter = frame_count;
@@ -670,7 +722,9 @@ impl FrameStats {
         }
 
         Self {
-            frame_time,
+            cpu_frame_time,
+            gpu_frame_time,
+            total_frame_count,
             frame_count,
             fps_counter,
             timer,

@@ -197,7 +197,11 @@ fn select_suitable_physical_device(
         .find(|device| {
             // Does device has graphics and present queues
             for family in device.queue_families.iter().filter(|f| f.has_queues()) {
-                if family.supports_graphics() && family.supports_compute() && graphics.is_none() {
+                if family.supports_graphics()
+                    && family.supports_compute()
+                    && family.supports_timestamp_queries()
+                    && graphics.is_none()
+                {
                     graphics = Some(*family);
                 }
 
