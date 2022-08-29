@@ -7,12 +7,12 @@ use app::vulkan::ash::vk;
 use app::vulkan::gpu_allocator::MemoryLocation;
 use app::vulkan::utils::create_gpu_only_buffer_from_data;
 use app::vulkan::{
-    Vertex, VkBuffer, VkBufferBarrier, VkComputePipeline, VkComputePipelineCreateInfo, VkContext,
-    VkDescriptorPool, VkDescriptorSet, VkDescriptorSetLayout, VkGraphicsPipeline,
-    VkGraphicsPipelineCreateInfo, VkGraphicsShaderCreateInfo, VkPipelineLayout,
-    VkWriteDescriptorSet, VkWriteDescriptorSetKind,
+    Buffer, BufferBarrier, CommandBuffer, ComputePipeline, ComputePipelineCreateInfo, Context,
+    DescriptorPool, DescriptorSet, DescriptorSetLayout, GraphicsPipeline,
+    GraphicsPipelineCreateInfo, GraphicsShaderCreateInfo, PipelineLayout, Vertex,
+    WriteDescriptorSet, WriteDescriptorSetKind,
 };
-use app::App;
+use app::{log, App, BaseApp};
 use gui::imgui::{ColorEdit, Condition, Slider, Ui, Window};
 use rand::Rng;
 
@@ -33,25 +33,25 @@ fn main() -> Result<()> {
 struct Particles {
     particle_count: u32,
     attractor_center: [f32; 3],
-    particles_buffer: VkBuffer,
-    compute_ubo_buffer: VkBuffer,
-    _compute_descriptor_pool: VkDescriptorPool,
-    _compute_descriptor_layout: VkDescriptorSetLayout,
-    compute_descriptor_set: VkDescriptorSet,
-    compute_pipeline_layout: VkPipelineLayout,
-    compute_pipeline: VkComputePipeline,
-    graphics_ubo_buffer: VkBuffer,
-    _graphics_descriptor_pool: VkDescriptorPool,
-    _graphics_descriptor_layout: VkDescriptorSetLayout,
-    graphics_descriptor_set: VkDescriptorSet,
-    graphics_pipeline_layout: VkPipelineLayout,
-    graphics_pipeline: VkGraphicsPipeline,
+    particles_buffer: Buffer,
+    compute_ubo_buffer: Buffer,
+    _compute_descriptor_pool: DescriptorPool,
+    _compute_descriptor_layout: DescriptorSetLayout,
+    compute_descriptor_set: DescriptorSet,
+    compute_pipeline_layout: PipelineLayout,
+    compute_pipeline: ComputePipeline,
+    graphics_ubo_buffer: Buffer,
+    _graphics_descriptor_pool: DescriptorPool,
+    _graphics_descriptor_layout: DescriptorSetLayout,
+    graphics_descriptor_set: DescriptorSet,
+    graphics_pipeline_layout: PipelineLayout,
+    graphics_pipeline: GraphicsPipeline,
 }
 
 impl App for Particles {
     type Gui = Gui;
 
-    fn new(base: &mut app::BaseApp<Self>) -> Result<Self> {
+    fn new(base: &mut BaseApp<Self>) -> Result<Self> {
         let context = &mut base.context;
 
         let particles_buffer = create_particle_buffer(context)?;
@@ -96,15 +96,15 @@ impl App for Particles {
             compute_descriptor_pool.allocate_set(&compute_descriptor_layout)?;
 
         compute_descriptor_set.update(&[
-            VkWriteDescriptorSet {
+            WriteDescriptorSet {
                 binding: 0,
-                kind: VkWriteDescriptorSetKind::StorageBuffer {
+                kind: WriteDescriptorSetKind::StorageBuffer {
                     buffer: &particles_buffer,
                 },
             },
-            VkWriteDescriptorSet {
+            WriteDescriptorSet {
                 binding: 1,
-                kind: VkWriteDescriptorSetKind::UniformBuffer {
+                kind: WriteDescriptorSetKind::UniformBuffer {
                     buffer: &compute_ubo_buffer,
                 },
             },
@@ -115,7 +115,7 @@ impl App for Particles {
 
         let compute_pipeline = context.create_compute_pipeline(
             &compute_pipeline_layout,
-            VkComputePipelineCreateInfo {
+            ComputePipelineCreateInfo {
                 shader_source: &include_bytes!("../shaders/shader.comp.spv")[..],
             },
         )?;
@@ -146,9 +146,9 @@ impl App for Particles {
         let graphics_descriptor_set =
             graphics_descriptor_pool.allocate_set(&graphics_descriptor_layout)?;
 
-        graphics_descriptor_set.update(&[VkWriteDescriptorSet {
+        graphics_descriptor_set.update(&[WriteDescriptorSet {
             binding: 0,
-            kind: VkWriteDescriptorSetKind::UniformBuffer {
+            kind: WriteDescriptorSetKind::UniformBuffer {
                 buffer: &graphics_ubo_buffer,
             },
         }]);
@@ -183,7 +183,7 @@ impl App for Particles {
 
     fn update(
         &mut self,
-        base: &app::BaseApp<Self>,
+        base: &BaseApp<Self>,
         gui: &mut <Self as App>::Gui,
         _: usize,
         delta_time: Duration,
@@ -220,8 +220,8 @@ impl App for Particles {
 
     fn record_raster_commands(
         &self,
-        base: &app::BaseApp<Self>,
-        buffer: &app::vulkan::VkCommandBuffer,
+        base: &BaseApp<Self>,
+        buffer: &CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
         buffer.bind_compute_pipeline(&self.compute_pipeline);
@@ -233,7 +233,7 @@ impl App for Particles {
         );
         buffer.dispatch(self.particle_count / DISPATCH_GROUP_SIZE_X, 1, 1);
 
-        buffer.pipeline_buffer_barriers(&[VkBufferBarrier {
+        buffer.pipeline_buffer_barriers(&[BufferBarrier {
             buffer: &self.particles_buffer,
             src_access_mask: vk::AccessFlags2::SHADER_WRITE,
             src_stage_mask: vk::PipelineStageFlags2::COMPUTE_SHADER,
@@ -263,7 +263,7 @@ impl App for Particles {
         Ok(())
     }
 
-    fn on_recreate_swapchain(&mut self, _: &app::BaseApp<Self>) -> Result<()> {
+    fn on_recreate_swapchain(&mut self, _: &BaseApp<Self>) -> Result<()> {
         Ok(())
     }
 }
@@ -403,7 +403,7 @@ impl Vertex for Particle {
     }
 }
 
-fn create_particle_buffer(context: &VkContext) -> Result<VkBuffer> {
+fn create_particle_buffer(context: &Context) -> Result<Buffer> {
     let start = Instant::now();
 
     let num_cpus = num_cpus::get();
@@ -464,25 +464,25 @@ fn create_particle_buffer(context: &VkContext) -> Result<VkBuffer> {
     )?;
 
     let time = Instant::now() - start;
-    app::log::info!("Generated particles in {time:?}");
+    log::info!("Generated particles in {time:?}");
 
     Ok(vertex_buffer)
 }
 
 fn create_graphics_pipeline(
-    context: &VkContext,
-    layout: &VkPipelineLayout,
+    context: &Context,
+    layout: &PipelineLayout,
     color_attachement_format: vk::Format,
-) -> Result<VkGraphicsPipeline> {
+) -> Result<GraphicsPipeline> {
     context.create_graphics_pipeline::<Particle>(
         layout,
-        VkGraphicsPipelineCreateInfo {
+        GraphicsPipelineCreateInfo {
             shaders: &[
-                VkGraphicsShaderCreateInfo {
+                GraphicsShaderCreateInfo {
                     source: &include_bytes!("../shaders/shader.vert.spv")[..],
                     stage: vk::ShaderStageFlags::VERTEX,
                 },
-                VkGraphicsShaderCreateInfo {
+                GraphicsShaderCreateInfo {
                     source: &include_bytes!("../shaders/shader.frag.spv")[..],
                     stage: vk::ShaderStageFlags::FRAGMENT,
                 },

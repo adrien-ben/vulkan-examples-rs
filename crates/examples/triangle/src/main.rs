@@ -4,10 +4,10 @@ use app::anyhow::Result;
 use app::vulkan::ash::vk;
 use app::vulkan::utils::create_gpu_only_buffer_from_data;
 use app::vulkan::{
-    VkBuffer, VkContext, VkGraphicsPipeline, VkGraphicsPipelineCreateInfo,
-    VkGraphicsShaderCreateInfo, VkPipelineLayout,
+    Buffer, CommandBuffer, Context, GraphicsPipeline, GraphicsPipelineCreateInfo,
+    GraphicsShaderCreateInfo, PipelineLayout,
 };
-use app::App;
+use app::{App, BaseApp};
 
 const WIDTH: u32 = 1024;
 const HEIGHT: u32 = 576;
@@ -17,15 +17,15 @@ fn main() -> Result<()> {
     app::run::<Triangle>(APP_NAME, WIDTH, HEIGHT, false)
 }
 struct Triangle {
-    vertex_buffer: VkBuffer,
-    _pipeline_layout: VkPipelineLayout,
-    pipeline: VkGraphicsPipeline,
+    vertex_buffer: Buffer,
+    _pipeline_layout: PipelineLayout,
+    pipeline: GraphicsPipeline,
 }
 
 impl App for Triangle {
     type Gui = ();
 
-    fn new(base: &mut app::BaseApp<Self>) -> Result<Self> {
+    fn new(base: &mut BaseApp<Self>) -> Result<Self> {
         let context = &mut base.context;
 
         let vertex_buffer = create_vertex_buffer(context)?;
@@ -41,13 +41,13 @@ impl App for Triangle {
         })
     }
 
-    fn on_recreate_swapchain(&mut self, _: &app::BaseApp<Self>) -> Result<()> {
+    fn on_recreate_swapchain(&mut self, _: &BaseApp<Self>) -> Result<()> {
         Ok(())
     }
 
     fn update(
         &mut self,
-        _: &app::BaseApp<Self>,
+        _: &BaseApp<Self>,
         _: &mut <Self as App>::Gui,
         _: usize,
         _: Duration,
@@ -57,8 +57,8 @@ impl App for Triangle {
 
     fn record_raster_commands(
         &self,
-        base: &app::BaseApp<Self>,
-        buffer: &app::vulkan::VkCommandBuffer,
+        base: &BaseApp<Self>,
+        buffer: &CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
         buffer.begin_rendering(
@@ -112,7 +112,7 @@ impl app::vulkan::Vertex for Vertex {
     }
 }
 
-fn create_vertex_buffer(context: &VkContext) -> Result<VkBuffer> {
+fn create_vertex_buffer(context: &Context) -> Result<Buffer> {
     let vertices: [Vertex; 3] = [
         Vertex {
             position: [-1.0, 1.0],
@@ -135,19 +135,19 @@ fn create_vertex_buffer(context: &VkContext) -> Result<VkBuffer> {
 }
 
 fn create_pipeline(
-    context: &VkContext,
-    layout: &VkPipelineLayout,
+    context: &Context,
+    layout: &PipelineLayout,
     color_attachment_format: vk::Format,
-) -> Result<VkGraphicsPipeline> {
+) -> Result<GraphicsPipeline> {
     context.create_graphics_pipeline::<Vertex>(
         layout,
-        VkGraphicsPipelineCreateInfo {
+        GraphicsPipelineCreateInfo {
             shaders: &[
-                VkGraphicsShaderCreateInfo {
+                GraphicsShaderCreateInfo {
                     source: &include_bytes!("../shaders/shader.vert.spv")[..],
                     stage: vk::ShaderStageFlags::VERTEX,
                 },
-                VkGraphicsShaderCreateInfo {
+                GraphicsShaderCreateInfo {
                     source: &include_bytes!("../shaders/shader.frag.spv")[..],
                     stage: vk::ShaderStageFlags::FRAGMENT,
                 },

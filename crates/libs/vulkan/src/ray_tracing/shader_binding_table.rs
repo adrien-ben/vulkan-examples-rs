@@ -2,20 +2,20 @@ use anyhow::Result;
 use ash::vk;
 use gpu_allocator::MemoryLocation;
 
-use crate::{utils::compute_aligned_size, VkBuffer, VkContext, VkRTPipeline, VkRayTracingContext};
+use crate::{utils::compute_aligned_size, Buffer, Context, RayTracingContext, RayTracingPipeline};
 
-pub struct VkShaderBindingTable {
-    _buffer: VkBuffer,
+pub struct ShaderBindingTable {
+    _buffer: Buffer,
     pub(crate) raygen_region: vk::StridedDeviceAddressRegionKHR,
     pub(crate) miss_region: vk::StridedDeviceAddressRegionKHR,
     pub(crate) hit_region: vk::StridedDeviceAddressRegionKHR,
 }
 
-impl VkShaderBindingTable {
+impl ShaderBindingTable {
     pub(crate) fn new(
-        context: &VkContext,
-        ray_tracing: &VkRayTracingContext,
-        pipeline: &VkRTPipeline,
+        context: &Context,
+        ray_tracing: &RayTracingContext,
+        pipeline: &RayTracingPipeline,
     ) -> Result<Self> {
         let desc = pipeline.shader_group_info;
 
@@ -130,15 +130,15 @@ impl VkShaderBindingTable {
     }
 }
 
-impl VkContext {
+impl Context {
     pub fn create_shader_binding_table(
         &self,
-        pipeline: &VkRTPipeline,
-    ) -> Result<VkShaderBindingTable> {
+        pipeline: &RayTracingPipeline,
+    ) -> Result<ShaderBindingTable> {
         let ray_tracing = self.ray_tracing.as_ref().expect(
-            "Cannot call VkContext::create_shader_binding_table when ray tracing is not enabled",
+            "Cannot call Context::create_shader_binding_table when ray tracing is not enabled",
         );
 
-        VkShaderBindingTable::new(self, ray_tracing, pipeline)
+        ShaderBindingTable::new(self, ray_tracing, pipeline)
     }
 }

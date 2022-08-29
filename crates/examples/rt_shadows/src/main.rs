@@ -3,7 +3,7 @@ use app::glam::{vec3, Mat4};
 use app::vulkan::ash::vk::{self, Packed24_8};
 use app::vulkan::gpu_allocator::MemoryLocation;
 use app::vulkan::utils::*;
-use app::vulkan::*;
+use app::{vulkan::*, BaseApp};
 use app::{App, ImageAndView};
 use gltf::Vertex;
 use gui::imgui::{ColorPicker, Condition, Ui, Window};
@@ -21,19 +21,19 @@ fn main() -> Result<()> {
 }
 
 struct Shadows {
-    ubo_buffer: VkBuffer,
+    ubo_buffer: Buffer,
     _model: Model,
     _bottom_as: BottomAS,
     _top_as: TopAS,
     pipeline_res: PipelineRes,
-    sbt: VkShaderBindingTable,
+    sbt: ShaderBindingTable,
     descriptor_res: DescriptorRes,
 }
 
 impl App for Shadows {
     type Gui = Gui;
 
-    fn new(base: &mut app::BaseApp<Self>) -> Result<Self> {
+    fn new(base: &mut BaseApp<Self>) -> Result<Self> {
         let context = &mut base.context;
 
         let ubo_buffer = context.create_buffer(
@@ -78,7 +78,7 @@ impl App for Shadows {
 
     fn update(
         &mut self,
-        base: &app::BaseApp<Self>,
+        base: &BaseApp<Self>,
         gui: &mut <Self as App>::Gui,
         _image_index: usize,
         _: Duration,
@@ -116,8 +116,8 @@ impl App for Shadows {
 
     fn record_raytracing_commands(
         &self,
-        base: &app::BaseApp<Self>,
-        buffer: &VkCommandBuffer,
+        base: &BaseApp<Self>,
+        buffer: &CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
         let static_set = &self.descriptor_res.static_set;
@@ -141,16 +141,16 @@ impl App for Shadows {
         Ok(())
     }
 
-    fn on_recreate_swapchain(&mut self, base: &app::BaseApp<Self>) -> Result<()> {
+    fn on_recreate_swapchain(&mut self, base: &BaseApp<Self>) -> Result<()> {
         base.storage_images
             .iter()
             .enumerate()
             .for_each(|(index, img)| {
                 let set = &self.descriptor_res.dynamic_sets[index];
 
-                set.update(&[VkWriteDescriptorSet {
+                set.update(&[WriteDescriptorSet {
                     binding: 1,
-                    kind: VkWriteDescriptorSetKind::StorageImage {
+                    kind: WriteDescriptorSetKind::StorageImage {
                         layout: vk::ImageLayout::GENERAL,
                         view: &img.view,
                     },
@@ -195,36 +195,36 @@ impl app::Gui for Gui {
 
 struct Model {
     gltf: gltf::Model,
-    vertex_buffer: VkBuffer,
-    index_buffer: VkBuffer,
-    transform_buffer: VkBuffer,
-    images: Vec<VkImage>,
-    views: Vec<VkImageView>,
-    samplers: Vec<VkSampler>,
+    vertex_buffer: Buffer,
+    index_buffer: Buffer,
+    transform_buffer: Buffer,
+    images: Vec<Image>,
+    views: Vec<ImageView>,
+    samplers: Vec<Sampler>,
     textures: Vec<(usize, usize)>,
 }
 
 struct BottomAS {
-    inner: VkAccelerationStructure,
-    geometry_info_buffer: VkBuffer,
+    inner: AccelerationStructure,
+    geometry_info_buffer: Buffer,
 }
 
 struct TopAS {
-    inner: VkAccelerationStructure,
-    _instance_buffer: VkBuffer,
+    inner: AccelerationStructure,
+    _instance_buffer: Buffer,
 }
 
 struct PipelineRes {
-    pipeline: VkRTPipeline,
-    pipeline_layout: VkPipelineLayout,
-    static_dsl: VkDescriptorSetLayout,
-    dynamic_dsl: VkDescriptorSetLayout,
+    pipeline: RayTracingPipeline,
+    pipeline_layout: PipelineLayout,
+    static_dsl: DescriptorSetLayout,
+    dynamic_dsl: DescriptorSetLayout,
 }
 
 struct DescriptorRes {
-    _pool: VkDescriptorPool,
-    static_set: VkDescriptorSet,
-    dynamic_sets: Vec<VkDescriptorSet>,
+    _pool: DescriptorPool,
+    static_set: DescriptorSet,
+    dynamic_sets: Vec<DescriptorSet>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -253,7 +253,7 @@ pub struct GeometryInfo {
     index_offset: u32,
 }
 
-fn create_model(context: &VkContext) -> Result<Model> {
+fn create_model(context: &Context) -> Result<Model> {
     let model = gltf::load_file(MODEL_PATH)?;
     let vertices = model.vertices.as_slice();
     let indices = model.indices.as_slice();
@@ -326,7 +326,7 @@ fn create_model(context: &VkContext) -> Result<Model> {
         )?;
 
         context.execute_one_time_commands(|cmd| {
-            cmd.pipeline_image_barriers(&[VkImageBarrier {
+            cmd.pipeline_image_barriers(&[ImageBarrier {
                 image: &image,
                 old_layout: vk::ImageLayout::UNDEFINED,
                 new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
@@ -338,7 +338,7 @@ fn create_model(context: &VkContext) -> Result<Model> {
 
             cmd.copy_buffer_to_image(&staging, &image, vk::ImageLayout::TRANSFER_DST_OPTIMAL);
 
-            cmd.pipeline_image_barriers(&[VkImageBarrier {
+            cmd.pipeline_image_barriers(&[ImageBarrier {
                 image: &image,
                 old_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                 new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
@@ -368,7 +368,7 @@ fn create_model(context: &VkContext) -> Result<Model> {
         )?;
 
         context.execute_one_time_commands(|cmd| {
-            cmd.pipeline_image_barriers(&[VkImageBarrier {
+            cmd.pipeline_image_barriers(&[ImageBarrier {
                 image: &image,
                 old_layout: vk::ImageLayout::UNDEFINED,
                 new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
@@ -444,7 +444,7 @@ fn map_gltf_sampler<'a>(sampler: &gltf::Sampler) -> vk::SamplerCreateInfoBuilder
         .min_filter(min_filter)
 }
 
-fn create_bottom_as(context: &mut VkContext, model: &Model) -> Result<BottomAS> {
+fn create_bottom_as(context: &mut Context, model: &Model) -> Result<BottomAS> {
     let vertex_buffer_addr = model.vertex_buffer.get_device_address();
 
     let index_buffer_addr = model.index_buffer.get_device_address();
@@ -528,7 +528,7 @@ fn create_bottom_as(context: &mut VkContext, model: &Model) -> Result<BottomAS> 
     })
 }
 
-fn create_top_as(context: &mut VkContext, bottom_as: &BottomAS) -> Result<TopAS> {
+fn create_top_as(context: &mut Context, bottom_as: &BottomAS) -> Result<TopAS> {
     #[rustfmt::skip]
     let transform_matrix = vk::TransformMatrixKHR { matrix: [
         1.0, 0.0, 0.0, 0.0,
@@ -585,7 +585,7 @@ fn create_top_as(context: &mut VkContext, bottom_as: &BottomAS) -> Result<TopAS>
     })
 }
 
-fn create_pipeline(context: &VkContext, model: &Model) -> Result<PipelineRes> {
+fn create_pipeline(context: &Context, model: &Model) -> Result<PipelineRes> {
     // descriptor and pipeline layouts
     let static_layout_bindings = [
         vk::DescriptorSetLayoutBinding::builder()
@@ -645,29 +645,29 @@ fn create_pipeline(context: &VkContext, model: &Model) -> Result<PipelineRes> {
 
     // Shaders
     let shaders_create_info = [
-        VkRTShaderCreateInfo {
+        RayTracingShaderCreateInfo {
             source: &include_bytes!("../shaders/raygen.rgen.spv")[..],
             stage: vk::ShaderStageFlags::RAYGEN_KHR,
-            group: VkRTShaderGroup::RayGen,
+            group: RayTracingShaderGroup::RayGen,
         },
-        VkRTShaderCreateInfo {
+        RayTracingShaderCreateInfo {
             source: &include_bytes!("../shaders/miss.rmiss.spv")[..],
             stage: vk::ShaderStageFlags::MISS_KHR,
-            group: VkRTShaderGroup::Miss,
+            group: RayTracingShaderGroup::Miss,
         },
-        VkRTShaderCreateInfo {
+        RayTracingShaderCreateInfo {
             source: &include_bytes!("../shaders/shadow.rmiss.spv")[..],
             stage: vk::ShaderStageFlags::MISS_KHR,
-            group: VkRTShaderGroup::Miss,
+            group: RayTracingShaderGroup::Miss,
         },
-        VkRTShaderCreateInfo {
+        RayTracingShaderCreateInfo {
             source: &include_bytes!("../shaders/closesthit.rchit.spv")[..],
             stage: vk::ShaderStageFlags::CLOSEST_HIT_KHR,
-            group: VkRTShaderGroup::ClosestHit,
+            group: RayTracingShaderGroup::ClosestHit,
         },
     ];
 
-    let pipeline_create_info = VkRTPipelineCreateInfo {
+    let pipeline_create_info = RayTracingPipelineCreateInfo {
         shaders: &shaders_create_info,
         max_ray_recursion_depth: 2,
     };
@@ -683,13 +683,13 @@ fn create_pipeline(context: &VkContext, model: &Model) -> Result<PipelineRes> {
 }
 
 fn create_descriptor_sets(
-    context: &VkContext,
+    context: &Context,
     pipeline_res: &PipelineRes,
     model: &Model,
     bottom_as: &BottomAS,
     top_as: &TopAS,
     storage_imgs: &[ImageAndView],
-    ubo_buffer: &VkBuffer,
+    ubo_buffer: &Buffer,
 ) -> Result<DescriptorRes> {
     let set_count = storage_imgs.len() as u32;
 
@@ -722,31 +722,31 @@ fn create_descriptor_sets(
     let dynamic_sets = pool.allocate_sets(&pipeline_res.dynamic_dsl, set_count)?;
 
     static_set.update(&[
-        VkWriteDescriptorSet {
+        WriteDescriptorSet {
             binding: 0,
-            kind: VkWriteDescriptorSetKind::AccelerationStructure {
+            kind: WriteDescriptorSetKind::AccelerationStructure {
                 acceleration_structure: &top_as.inner,
             },
         },
-        VkWriteDescriptorSet {
+        WriteDescriptorSet {
             binding: 2,
-            kind: VkWriteDescriptorSetKind::UniformBuffer { buffer: ubo_buffer },
+            kind: WriteDescriptorSetKind::UniformBuffer { buffer: ubo_buffer },
         },
-        VkWriteDescriptorSet {
+        WriteDescriptorSet {
             binding: 3,
-            kind: VkWriteDescriptorSetKind::StorageBuffer {
+            kind: WriteDescriptorSetKind::StorageBuffer {
                 buffer: &model.vertex_buffer,
             },
         },
-        VkWriteDescriptorSet {
+        WriteDescriptorSet {
             binding: 4,
-            kind: VkWriteDescriptorSetKind::StorageBuffer {
+            kind: WriteDescriptorSetKind::StorageBuffer {
                 buffer: &model.index_buffer,
             },
         },
-        VkWriteDescriptorSet {
+        WriteDescriptorSet {
             binding: 5,
-            kind: VkWriteDescriptorSetKind::StorageBuffer {
+            kind: WriteDescriptorSetKind::StorageBuffer {
                 buffer: &bottom_as.geometry_info_buffer,
             },
         },
@@ -756,9 +756,9 @@ fn create_descriptor_sets(
         let view = &model.views[*image_index];
         let sampler = &model.samplers[*sampler_index];
 
-        static_set.update(&[VkWriteDescriptorSet {
+        static_set.update(&[WriteDescriptorSet {
             binding: 6,
-            kind: VkWriteDescriptorSetKind::CombinedImageSampler {
+            kind: WriteDescriptorSetKind::CombinedImageSampler {
                 view,
                 sampler,
                 layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
@@ -767,9 +767,9 @@ fn create_descriptor_sets(
     }
 
     dynamic_sets.iter().enumerate().for_each(|(index, set)| {
-        set.update(&[VkWriteDescriptorSet {
+        set.update(&[WriteDescriptorSet {
             binding: 1,
-            kind: VkWriteDescriptorSetKind::StorageImage {
+            kind: WriteDescriptorSetKind::StorageImage {
                 layout: vk::ImageLayout::GENERAL,
                 view: &storage_imgs[index].view,
             },

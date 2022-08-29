@@ -10,19 +10,19 @@ use gpu_allocator::{
     MemoryLocation,
 };
 
-use crate::{device::VkDevice, VkContext};
+use crate::{device::Device, Context};
 
-pub struct VkBuffer {
-    device: Arc<VkDevice>,
+pub struct Buffer {
+    device: Arc<Device>,
     allocator: Arc<Mutex<Allocator>>,
     pub(crate) inner: vk::Buffer,
     allocation: Option<Allocation>,
     pub size: vk::DeviceSize,
 }
 
-impl VkBuffer {
+impl Buffer {
     pub(crate) fn new(
-        device: Arc<VkDevice>,
+        device: Arc<Device>,
         allocator: Arc<Mutex<Allocator>>,
         usage: vk::BufferUsageFlags,
         memory_location: MemoryLocation,
@@ -76,14 +76,14 @@ impl VkBuffer {
     }
 }
 
-impl VkContext {
+impl Context {
     pub fn create_buffer(
         &self,
         usage: vk::BufferUsageFlags,
         memory_location: MemoryLocation,
         size: vk::DeviceSize,
-    ) -> Result<VkBuffer> {
-        VkBuffer::new(
+    ) -> Result<Buffer> {
+        Buffer::new(
             self.device.clone(),
             self.allocator.clone(),
             usage,
@@ -93,7 +93,7 @@ impl VkContext {
     }
 }
 
-impl Drop for VkBuffer {
+impl Drop for Buffer {
     fn drop(&mut self) {
         unsafe { self.device.inner.destroy_buffer(self.inner, None) };
         self.allocator

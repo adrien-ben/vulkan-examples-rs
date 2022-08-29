@@ -3,16 +3,16 @@ use std::sync::Arc;
 use anyhow::Result;
 use ash::vk;
 
-use crate::{device::VkDevice, VkCommandBuffer, VkFence, VkSemaphore};
+use crate::{device::Device, CommandBuffer, Fence, Semaphore};
 
 #[derive(Debug, Clone, Copy)]
-pub struct VkQueueFamily {
+pub struct QueueFamily {
     pub index: u32,
     pub(crate) inner: vk::QueueFamilyProperties,
     supports_present: bool,
 }
 
-impl VkQueueFamily {
+impl QueueFamily {
     pub(crate) fn new(
         index: u32,
         inner: vk::QueueFamilyProperties,
@@ -46,22 +46,22 @@ impl VkQueueFamily {
     }
 }
 
-pub struct VkQueue {
-    device: Arc<VkDevice>,
+pub struct Queue {
+    device: Arc<Device>,
     pub inner: vk::Queue,
 }
 
-impl VkQueue {
-    pub(crate) fn new(device: Arc<VkDevice>, inner: vk::Queue) -> Self {
+impl Queue {
+    pub(crate) fn new(device: Arc<Device>, inner: vk::Queue) -> Self {
         Self { device, inner }
     }
 
     pub fn submit(
         &self,
-        command_buffer: &VkCommandBuffer,
-        wait_semaphore: Option<VkSemaphoreSubmitInfo>,
-        signal_semaphore: Option<VkSemaphoreSubmitInfo>,
-        fence: &VkFence,
+        command_buffer: &CommandBuffer,
+        wait_semaphore: Option<SemaphoreSubmitInfo>,
+        signal_semaphore: Option<SemaphoreSubmitInfo>,
+        fence: &Fence,
     ) -> Result<()> {
         let wait_semaphore_submit_info = wait_semaphore.map(|s| {
             vk::SemaphoreSubmitInfo::builder()
@@ -103,7 +103,7 @@ impl VkQueue {
     }
 }
 
-pub struct VkSemaphoreSubmitInfo<'a> {
-    pub semaphore: &'a VkSemaphore,
+pub struct SemaphoreSubmitInfo<'a> {
+    pub semaphore: &'a Semaphore,
     pub stage_mask: vk::PipelineStageFlags2,
 }

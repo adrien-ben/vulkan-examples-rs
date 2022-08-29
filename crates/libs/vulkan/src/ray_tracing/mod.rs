@@ -7,32 +7,32 @@ pub use pipeline::*;
 pub use shader_binding_table::*;
 
 use ash::{
-    extensions::khr::{AccelerationStructure, RayTracingPipeline},
+    extensions::khr::{
+        AccelerationStructure as AshAccelerationStructure,
+        RayTracingPipeline as AshRayTracingPipeline,
+    },
     vk,
 };
 
-use crate::{device::VkDevice, instance::VkInstance, physical_device::VkPhysicalDevice};
+use crate::{device::Device, instance::Instance, physical_device::PhysicalDevice};
 
-pub struct VkRayTracingContext {
+pub struct RayTracingContext {
     pub pipeline_properties: vk::PhysicalDeviceRayTracingPipelinePropertiesKHR,
-    pub pipeline_fn: RayTracingPipeline,
+    pub pipeline_fn: AshRayTracingPipeline,
     pub acceleration_structure_properties: vk::PhysicalDeviceAccelerationStructurePropertiesKHR,
-    pub acceleration_structure_fn: AccelerationStructure,
+    pub acceleration_structure_fn: AshAccelerationStructure,
 }
 
-impl VkRayTracingContext {
-    pub(crate) fn new(
-        instance: &VkInstance,
-        pdevice: &VkPhysicalDevice,
-        device: &VkDevice,
-    ) -> Self {
+impl RayTracingContext {
+    pub(crate) fn new(instance: &Instance, pdevice: &PhysicalDevice, device: &Device) -> Self {
         let pipeline_properties =
-            unsafe { RayTracingPipeline::get_properties(&instance.inner, pdevice.inner) };
-        let pipeline_fn = RayTracingPipeline::new(&instance.inner, &device.inner);
+            unsafe { AshRayTracingPipeline::get_properties(&instance.inner, pdevice.inner) };
+        let pipeline_fn = AshRayTracingPipeline::new(&instance.inner, &device.inner);
 
         let acceleration_structure_properties =
-            unsafe { AccelerationStructure::get_properties(&instance.inner, pdevice.inner) };
-        let acceleration_structure_fn = AccelerationStructure::new(&instance.inner, &device.inner);
+            unsafe { AshAccelerationStructure::get_properties(&instance.inner, pdevice.inner) };
+        let acceleration_structure_fn =
+            AshAccelerationStructure::new(&instance.inner, &device.inner);
 
         Self {
             pipeline_properties,

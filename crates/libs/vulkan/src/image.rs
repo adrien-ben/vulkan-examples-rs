@@ -7,10 +7,10 @@ use gpu_allocator::{
     MemoryLocation,
 };
 
-use crate::{device::VkDevice, VkContext};
+use crate::{device::Device, Context};
 
-pub struct VkImage {
-    device: Arc<VkDevice>,
+pub struct Image {
+    device: Arc<Device>,
     allocator: Arc<Mutex<Allocator>>,
     pub(crate) inner: vk::Image,
     allocation: Option<Allocation>,
@@ -19,14 +19,14 @@ pub struct VkImage {
     is_swapchain: bool, // if set, image should not be destroyed
 }
 
-pub struct VkImageView {
-    device: Arc<VkDevice>,
+pub struct ImageView {
+    device: Arc<Device>,
     pub(crate) inner: vk::ImageView,
 }
 
-impl VkImage {
+impl Image {
     pub(crate) fn new_2d(
-        device: Arc<VkDevice>,
+        device: Arc<Device>,
         allocator: Arc<Mutex<Allocator>>,
         usage: vk::ImageUsageFlags,
         memory_location: MemoryLocation,
@@ -79,7 +79,7 @@ impl VkImage {
     }
 
     pub(crate) fn from_swapchain_image(
-        device: Arc<VkDevice>,
+        device: Arc<Device>,
         allocator: Arc<Mutex<Allocator>>,
         swapchain_image: vk::Image,
         format: vk::Format,
@@ -102,7 +102,7 @@ impl VkImage {
         }
     }
 
-    pub fn create_image_view(&self) -> Result<VkImageView> {
+    pub fn create_image_view(&self) -> Result<ImageView> {
         let view_info = vk::ImageViewCreateInfo::builder()
             .image(self.inner)
             .view_type(vk::ImageViewType::TYPE_2D)
@@ -117,14 +117,14 @@ impl VkImage {
 
         let inner = unsafe { self.device.inner.create_image_view(&view_info, None)? };
 
-        Ok(VkImageView {
+        Ok(ImageView {
             device: self.device.clone(),
             inner,
         })
     }
 }
 
-impl VkContext {
+impl Context {
     pub fn create_image(
         &self,
         usage: vk::ImageUsageFlags,
@@ -132,8 +132,8 @@ impl VkContext {
         format: vk::Format,
         width: u32,
         height: u32,
-    ) -> Result<VkImage> {
-        VkImage::new_2d(
+    ) -> Result<Image> {
+        Image::new_2d(
             self.device.clone(),
             self.allocator.clone(),
             usage,
@@ -145,7 +145,7 @@ impl VkContext {
     }
 }
 
-impl Drop for VkImage {
+impl Drop for Image {
     fn drop(&mut self) {
         if self.is_swapchain {
             return;
@@ -160,7 +160,7 @@ impl Drop for VkImage {
     }
 }
 
-impl Drop for VkImageView {
+impl Drop for ImageView {
     fn drop(&mut self) {
         unsafe { self.device.inner.destroy_image_view(self.inner, None) };
     }

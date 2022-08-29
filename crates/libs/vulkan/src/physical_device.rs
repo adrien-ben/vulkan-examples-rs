@@ -3,24 +3,24 @@ use std::ffi::CStr;
 use anyhow::Result;
 use ash::{vk, Instance};
 
-use crate::{device::VkDeviceFeatures, queue::VkQueueFamily, surface::VkSurface};
+use crate::{device::DeviceFeatures, queue::QueueFamily, surface::Surface};
 
 #[derive(Debug, Clone)]
-pub struct VkPhysicalDevice {
+pub struct PhysicalDevice {
     pub(crate) inner: vk::PhysicalDevice,
     pub(crate) name: String,
     pub(crate) device_type: vk::PhysicalDeviceType,
-    pub(crate) queue_families: Vec<VkQueueFamily>,
+    pub(crate) queue_families: Vec<QueueFamily>,
     pub(crate) supported_extensions: Vec<String>,
     pub(crate) supported_surface_formats: Vec<vk::SurfaceFormatKHR>,
     pub(crate) supported_present_modes: Vec<vk::PresentModeKHR>,
-    pub(crate) supported_device_features: VkDeviceFeatures,
+    pub(crate) supported_device_features: DeviceFeatures,
 }
 
-impl VkPhysicalDevice {
+impl PhysicalDevice {
     pub(crate) fn new(
         instance: &Instance,
-        surface: &VkSurface,
+        surface: &Surface,
         inner: vk::PhysicalDevice,
     ) -> Result<Self> {
         let props = unsafe { instance.get_physical_device_properties(inner) };
@@ -48,7 +48,7 @@ impl VkPhysicalDevice {
                     )?
                 };
 
-                Ok(VkQueueFamily::new(index as _, p, present_support))
+                Ok(QueueFamily::new(index as _, p, present_support))
             })
             .collect::<Result<_>>()?;
 
@@ -88,7 +88,7 @@ impl VkPhysicalDevice {
             .push_next(&mut features13);
         unsafe { instance.get_physical_device_features2(inner, &mut features) };
 
-        let supported_device_features = VkDeviceFeatures {
+        let supported_device_features = DeviceFeatures {
             ray_tracing_pipeline: ray_tracing_feature.ray_tracing_pipeline == vk::TRUE,
             acceleration_structure: acceleration_struct_feature.acceleration_structure == vk::TRUE,
             runtime_descriptor_array: features12.runtime_descriptor_array == vk::TRUE,

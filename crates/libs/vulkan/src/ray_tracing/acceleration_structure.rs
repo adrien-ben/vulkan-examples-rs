@@ -4,19 +4,19 @@ use anyhow::Result;
 use ash::vk;
 use gpu_allocator::MemoryLocation;
 
-use crate::{VkBuffer, VkContext, VkRayTracingContext};
+use crate::{Buffer, Context, RayTracingContext};
 
-pub struct VkAccelerationStructure {
-    ray_tracing: Arc<VkRayTracingContext>,
+pub struct AccelerationStructure {
+    ray_tracing: Arc<RayTracingContext>,
     pub(crate) inner: vk::AccelerationStructureKHR,
-    _buffer: VkBuffer,
+    _buffer: Buffer,
     pub address: u64,
 }
 
-impl VkAccelerationStructure {
+impl AccelerationStructure {
     pub(crate) fn new(
-        context: &VkContext,
-        ray_tracing: Arc<VkRayTracingContext>,
+        context: &Context,
+        ray_tracing: Arc<RayTracingContext>,
         level: vk::AccelerationStructureTypeKHR,
         as_geometry: &[vk::AccelerationStructureGeometryKHR],
         as_ranges: &[vk::AccelerationStructureBuildRangeInfoKHR],
@@ -92,18 +92,18 @@ impl VkAccelerationStructure {
     }
 }
 
-impl VkContext {
+impl Context {
     pub fn create_bottom_level_acceleration_structure(
         &self,
         as_geometry: &[vk::AccelerationStructureGeometryKHR],
         as_ranges: &[vk::AccelerationStructureBuildRangeInfoKHR],
         max_primitive_counts: &[u32],
-    ) -> Result<VkAccelerationStructure> {
+    ) -> Result<AccelerationStructure> {
         let ray_tracing = self.ray_tracing.clone().expect(
-            "Cannot call VkContext::create_bottom_level_acceleration_structure when ray tracing is not enabled",
+            "Cannot call Context::create_bottom_level_acceleration_structure when ray tracing is not enabled",
         );
 
-        VkAccelerationStructure::new(
+        AccelerationStructure::new(
             self,
             ray_tracing,
             vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL,
@@ -118,12 +118,12 @@ impl VkContext {
         as_geometry: &[vk::AccelerationStructureGeometryKHR],
         as_ranges: &[vk::AccelerationStructureBuildRangeInfoKHR],
         max_primitive_counts: &[u32],
-    ) -> Result<VkAccelerationStructure> {
+    ) -> Result<AccelerationStructure> {
         let ray_tracing = self.ray_tracing.clone().expect(
-            "Cannot call VkContext::create_top_level_acceleration_structure when ray tracing is not enabled",
+            "Cannot call Context::create_top_level_acceleration_structure when ray tracing is not enabled",
         );
 
-        VkAccelerationStructure::new(
+        AccelerationStructure::new(
             self,
             ray_tracing,
             vk::AccelerationStructureTypeKHR::TOP_LEVEL,
@@ -134,7 +134,7 @@ impl VkContext {
     }
 }
 
-impl Drop for VkAccelerationStructure {
+impl Drop for AccelerationStructure {
     fn drop(&mut self) {
         unsafe {
             self.ray_tracing

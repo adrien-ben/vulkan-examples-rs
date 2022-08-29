@@ -4,7 +4,7 @@ use anyhow::Result;
 use ash::vk;
 use gpu_allocator::MemoryLocation;
 
-use crate::{VkBuffer, VkContext};
+use crate::{Buffer, Context};
 
 pub fn compute_aligned_size(size: u32, alignment: u32) -> u32 {
     (size + (alignment - 1)) & !(alignment - 1)
@@ -16,10 +16,10 @@ pub fn read_shader_from_bytes(bytes: &[u8]) -> Result<Vec<u32>> {
 }
 
 pub fn create_gpu_only_buffer_from_data<T: Copy>(
-    context: &VkContext,
+    context: &Context,
     usage: vk::BufferUsageFlags,
     data: &[T],
-) -> Result<VkBuffer> {
+) -> Result<Buffer> {
     let size = size_of_val(data) as _;
     let staging_buffer = context.create_buffer(
         vk::BufferUsageFlags::TRANSFER_SRC,

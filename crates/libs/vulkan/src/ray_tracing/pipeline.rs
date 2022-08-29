@@ -3,52 +3,52 @@ use std::{ffi::CString, sync::Arc};
 use anyhow::Result;
 use ash::vk;
 
-use crate::{device::VkDevice, VkContext};
+use crate::{device::Device, Context};
 
-use crate::{VkPipelineLayout, VkRayTracingContext, VkShaderModule};
+use crate::{PipelineLayout, RayTracingContext, ShaderModule};
 
 #[derive(Debug, Clone, Copy)]
-pub struct VkRTPipelineCreateInfo<'a> {
-    pub shaders: &'a [VkRTShaderCreateInfo<'a>],
+pub struct RayTracingPipelineCreateInfo<'a> {
+    pub shaders: &'a [RayTracingShaderCreateInfo<'a>],
     pub max_ray_recursion_depth: u32,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct VkRTShaderCreateInfo<'a> {
+pub struct RayTracingShaderCreateInfo<'a> {
     pub source: &'a [u8],
     pub stage: vk::ShaderStageFlags,
-    pub group: VkRTShaderGroup,
+    pub group: RayTracingShaderGroup,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum VkRTShaderGroup {
+pub enum RayTracingShaderGroup {
     RayGen,
     Miss,
     ClosestHit,
 }
 
-pub struct VkRTPipeline {
-    device: Arc<VkDevice>,
+pub struct RayTracingPipeline {
+    device: Arc<Device>,
     pub(crate) inner: vk::Pipeline,
-    pub(crate) shader_group_info: VkRTShaderGroupInfo,
+    pub(crate) shader_group_info: RayTracingShaderGroupInfo,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct VkRTShaderGroupInfo {
+pub struct RayTracingShaderGroupInfo {
     pub group_count: u32,
     pub raygen_shader_count: u32,
     pub miss_shader_count: u32,
     pub hit_shader_count: u32,
 }
 
-impl VkRTPipeline {
+impl RayTracingPipeline {
     pub(crate) fn new(
-        device: Arc<VkDevice>,
-        ray_tracing: &VkRayTracingContext,
-        layout: &VkPipelineLayout,
-        create_info: VkRTPipelineCreateInfo,
+        device: Arc<Device>,
+        ray_tracing: &RayTracingContext,
+        layout: &PipelineLayout,
+        create_info: RayTracingPipelineCreateInfo,
     ) -> Result<Self> {
-        let mut shader_group_info = VkRTShaderGroupInfo {
+        let mut shader_group_info = RayTracingShaderGroupInfo {
             group_count: create_info.shaders.len() as _,
             ..Default::default()
         };
@@ -60,7 +60,7 @@ impl VkRTPipeline {
         let entry_point_name = CString::new("main").unwrap();
 
         for (shader_index, shader) in create_info.shaders.iter().enumerate() {
-            let module = VkShaderModule::from_bytes(device.clone(), shader.source)?;
+            let module = ShaderModule::from_bytes(device.clone(), shader.source)?;
 
             let stage = vk::PipelineShaderStageCreateInfo::builder()
                 .stage(shader.stage)
@@ -69,9 +69,9 @@ impl VkRTPipeline {
                 .build();
 
             match shader.group {
-                VkRTShaderGroup::RayGen => shader_group_info.raygen_shader_count += 1,
-                VkRTShaderGroup::Miss => shader_group_info.miss_shader_count += 1,
-                VkRTShaderGroup::ClosestHit => shader_group_info.hit_shader_count += 1,
+                RayTracingShaderGroup::RayGen => shader_group_info.raygen_shader_count += 1,
+                RayTracingShaderGroup::Miss => shader_group_info.miss_shader_count += 1,
+                RayTracingShaderGroup::ClosestHit => shader_group_info.hit_shader_count += 1,
             };
 
             let mut group = vk::RayTracingShaderGroupCreateInfoKHR::builder()
@@ -81,10 +81,10 @@ impl VkRTPipeline {
                 .any_hit_shader(vk::SHADER_UNUSED_KHR)
                 .intersection_shader(vk::SHADER_UNUSED_KHR);
             group = match shader.group {
-                VkRTShaderGroup::RayGen | VkRTShaderGroup::Miss => {
+                RayTracingShaderGroup::RayGen | RayTracingShaderGroup::Miss => {
                     group.general_shader(shader_index as _)
                 }
-                VkRTShaderGroup::ClosestHit => group
+                RayTracingShaderGroup::ClosestHit => group
                     .ty(vk::RayTracingShaderGroupTypeKHR::TRIANGLES_HIT_GROUP)
                     .closest_hit_shader(shader_index as _),
             };
@@ -117,21 +117,21 @@ impl VkRTPipeline {
     }
 }
 
-impl VkContext {
+impl Context {
     pub fn create_ray_tracing_pipeline(
         &self,
-        layout: &VkPipelineLayout,
-        create_info: VkRTPipelineCreateInfo,
-    ) -> Result<VkRTPipeline> {
+        layout: &PipelineLayout,
+        create_info: RayTracingPipelineCreateInfo,
+    ) -> Result<RayTracingPipeline> {
         let ray_tracing = self.ray_tracing.as_ref().expect(
-            "Cannot call VkContext::create_ray_tracing_pipeline when ray tracing is not enabled",
+            "Cannot call Context::create_ray_tracing_pipeline when ray tracing is not enabled",
         );
 
-        VkRTPipeline::new(self.device.clone(), ray_tracing, layout, create_info)
+        RayTracingPipeline::new(self.device.clone(), ray_tracing, layout, create_info)
     }
 }
 
-impl Drop for VkRTPipeline {
+impl Drop for RayTracingPipeline {
     fn drop(&mut self) {
         unsafe { self.device.inner.destroy_pipeline(self.inner, None) };
     }

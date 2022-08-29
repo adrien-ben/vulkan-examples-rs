@@ -4,22 +4,22 @@ use anyhow::Result;
 use ash::vk;
 
 use crate::{
-    device::VkDevice, VkBuffer, VkComputePipeline, VkContext, VkDescriptorSet, VkGraphicsPipeline,
-    VkImage, VkImageView, VkPipelineLayout, VkQueueFamily, VkRTPipeline, VkRayTracingContext,
-    VkShaderBindingTable, VkTimestampQueryPool,
+    device::Device, Buffer, ComputePipeline, Context, DescriptorSet, GraphicsPipeline, Image,
+    ImageView, PipelineLayout, QueueFamily, RayTracingContext, RayTracingPipeline,
+    ShaderBindingTable, TimestampQueryPool,
 };
 
-pub struct VkCommandPool {
-    device: Arc<VkDevice>,
-    ray_tracing: Option<Arc<VkRayTracingContext>>,
+pub struct CommandPool {
+    device: Arc<Device>,
+    ray_tracing: Option<Arc<RayTracingContext>>,
     pub inner: vk::CommandPool,
 }
 
-impl VkCommandPool {
+impl CommandPool {
     pub(crate) fn new(
-        device: Arc<VkDevice>,
-        ray_tracing: Option<Arc<VkRayTracingContext>>,
-        queue_family: VkQueueFamily,
+        device: Arc<Device>,
+        ray_tracing: Option<Arc<RayTracingContext>>,
+        queue_family: QueueFamily,
         flags: Option<vk::CommandPoolCreateFlags>,
     ) -> Result<Self> {
         let flags = flags.unwrap_or_else(vk::CommandPoolCreateFlags::empty);
@@ -40,7 +40,7 @@ impl VkCommandPool {
         &self,
         level: vk::CommandBufferLevel,
         count: u32,
-    ) -> Result<Vec<VkCommandBuffer>> {
+    ) -> Result<Vec<CommandBuffer>> {
         let allocate_info = vk::CommandBufferAllocateInfo::builder()
             .command_pool(self.inner)
             .level(level)
@@ -49,7 +49,7 @@ impl VkCommandPool {
         let buffers = unsafe { self.device.inner.allocate_command_buffers(&allocate_info)? };
         let buffers = buffers
             .into_iter()
-            .map(|inner| VkCommandBuffer {
+            .map(|inner| CommandBuffer {
                 device: self.device.clone(),
                 ray_tracing: self.ray_tracing.clone(),
                 inner,
@@ -59,22 +59,19 @@ impl VkCommandPool {
         Ok(buffers)
     }
 
-    pub fn allocate_command_buffer(
-        &self,
-        level: vk::CommandBufferLevel,
-    ) -> Result<VkCommandBuffer> {
+    pub fn allocate_command_buffer(&self, level: vk::CommandBufferLevel) -> Result<CommandBuffer> {
         let buffers = self.allocate_command_buffers(level, 1)?;
         let buffer = buffers.into_iter().next().unwrap();
 
         Ok(buffer)
     }
 
-    pub fn free_command_buffers(&self, buffer: &[VkCommandBuffer]) {
+    pub fn free_command_buffers(&self, buffer: &[CommandBuffer]) {
         let buffs = buffer.iter().map(|b| b.inner).collect::<Vec<_>>();
         unsafe { self.device.inner.free_command_buffers(self.inner, &buffs) };
     }
 
-    pub fn free_command_buffer(&self, buffer: &VkCommandBuffer) -> Result<()> {
+    pub fn free_command_buffer(&self, buffer: &CommandBuffer) -> Result<()> {
         let buffs = [buffer.inner];
         unsafe { self.device.inner.free_command_buffers(self.inner, &buffs) };
 
@@ -82,13 +79,13 @@ impl VkCommandPool {
     }
 }
 
-impl VkContext {
+impl Context {
     pub fn create_command_pool(
         &self,
-        queue_family: VkQueueFamily,
+        queue_family: QueueFamily,
         flags: Option<vk::CommandPoolCreateFlags>,
-    ) -> Result<VkCommandPool> {
-        VkCommandPool::new(
+    ) -> Result<CommandPool> {
+        CommandPool::new(
             self.device.clone(),
             self.ray_tracing.clone(),
             queue_family,
@@ -97,19 +94,19 @@ impl VkContext {
     }
 }
 
-impl Drop for VkCommandPool {
+impl Drop for CommandPool {
     fn drop(&mut self) {
         unsafe { self.device.inner.destroy_command_pool(self.inner, None) };
     }
 }
 
-pub struct VkCommandBuffer {
-    device: Arc<VkDevice>,
-    ray_tracing: Option<Arc<VkRayTracingContext>>,
+pub struct CommandBuffer {
+    device: Arc<Device>,
+    ray_tracing: Option<Arc<RayTracingContext>>,
     pub inner: vk::CommandBuffer,
 }
 
-impl VkCommandBuffer {
+impl CommandBuffer {
     pub fn begin(&self, flags: Option<vk::CommandBufferUsageFlags>) -> Result<()> {
         let begin_info = vk::CommandBufferBeginInfo::builder()
             .flags(flags.unwrap_or(vk::CommandBufferUsageFlags::empty()));
@@ -138,7 +135,7 @@ impl VkCommandBuffer {
         Ok(())
     }
 
-    pub fn bind_rt_pipeline(&self, pipeline: &VkRTPipeline) {
+    pub fn bind_rt_pipeline(&self, pipeline: &RayTracingPipeline) {
         unsafe {
             self.device.inner.cmd_bind_pipeline(
                 self.inner,
@@ -148,7 +145,7 @@ impl VkCommandBuffer {
         }
     }
 
-    pub fn bind_graphics_pipeline(&self, pipeline: &VkGraphicsPipeline) {
+    pub fn bind_graphics_pipeline(&self, pipeline: &GraphicsPipeline) {
         unsafe {
             self.device.inner.cmd_bind_pipeline(
                 self.inner,
@@ -158,7 +155,7 @@ impl VkCommandBuffer {
         }
     }
 
-    pub fn bind_compute_pipeline(&self, pipeline: &VkComputePipeline) {
+    pub fn bind_compute_pipeline(&self, pipeline: &ComputePipeline) {
         unsafe {
             self.device.inner.cmd_bind_pipeline(
                 self.inner,
@@ -168,7 +165,7 @@ impl VkCommandBuffer {
         }
     }
 
-    pub fn bind_vertex_buffer(&self, vertex_buffer: &VkBuffer) {
+    pub fn bind_vertex_buffer(&self, vertex_buffer: &Buffer) {
         unsafe {
             self.device
                 .inner
@@ -195,9 +192,9 @@ impl VkCommandBuffer {
     pub fn bind_descriptor_sets(
         &self,
         bind_point: vk::PipelineBindPoint,
-        layout: &VkPipelineLayout,
+        layout: &PipelineLayout,
         first_set: u32,
-        sets: &[&VkDescriptorSet],
+        sets: &[&DescriptorSet],
     ) {
         let sets = sets.iter().map(|s| s.inner).collect::<Vec<_>>();
         unsafe {
@@ -212,7 +209,7 @@ impl VkCommandBuffer {
         }
     }
 
-    pub fn pipeline_buffer_barriers(&self, barriers: &[VkBufferBarrier]) {
+    pub fn pipeline_buffer_barriers(&self, barriers: &[BufferBarrier]) {
         let barriers = barriers
             .iter()
             .map(|b| {
@@ -237,7 +234,7 @@ impl VkCommandBuffer {
         };
     }
 
-    pub fn copy_buffer(&self, src_buffer: &VkBuffer, dst_buffer: &VkBuffer) {
+    pub fn copy_buffer(&self, src_buffer: &Buffer, dst_buffer: &Buffer) {
         unsafe {
             let region = vk::BufferCopy::builder().size(src_buffer.size);
             self.device.inner.cmd_copy_buffer(
@@ -249,7 +246,7 @@ impl VkCommandBuffer {
         };
     }
 
-    pub fn pipeline_image_barriers(&self, barriers: &[VkImageBarrier]) {
+    pub fn pipeline_image_barriers(&self, barriers: &[ImageBarrier]) {
         let barriers = barriers
             .iter()
             .map(|b| {
@@ -283,9 +280,9 @@ impl VkCommandBuffer {
 
     pub fn copy_image(
         &self,
-        src_image: &VkImage,
+        src_image: &Image,
         src_layout: vk::ImageLayout,
-        dst_image: &VkImage,
+        dst_image: &Image,
         dst_layout: vk::ImageLayout,
     ) {
         let region = vk::ImageCopy::builder()
@@ -319,7 +316,7 @@ impl VkCommandBuffer {
         };
     }
 
-    pub fn copy_buffer_to_image(&self, src: &VkBuffer, dst: &VkImage, layout: vk::ImageLayout) {
+    pub fn copy_buffer_to_image(&self, src: &Buffer, dst: &Image, layout: vk::ImageLayout) {
         let region = vk::BufferImageCopy::builder()
             .image_subresource(vk::ImageSubresourceLayers {
                 aspect_mask: vk::ImageAspectFlags::COLOR,
@@ -346,7 +343,7 @@ impl VkCommandBuffer {
         as_build_range_info: &[vk::AccelerationStructureBuildRangeInfoKHR],
     ) {
         let ray_tracing = self.ray_tracing.as_ref().expect(
-            "Cannot call VkCommandBuffer::build_acceleration_structures when ray tracing is not enabled",
+            "Cannot call CommandBuffer::build_acceleration_structures when ray tracing is not enabled",
         );
 
         unsafe {
@@ -360,11 +357,11 @@ impl VkCommandBuffer {
         };
     }
 
-    pub fn trace_rays(&self, shader_binding_table: &VkShaderBindingTable, width: u32, height: u32) {
+    pub fn trace_rays(&self, shader_binding_table: &ShaderBindingTable, width: u32, height: u32) {
         let ray_tracing = self
             .ray_tracing
             .as_ref()
-            .expect("Cannot call VkCommandBuffer::trace_rays when ray tracing is not enabled");
+            .expect("Cannot call CommandBuffer::trace_rays when ray tracing is not enabled");
 
         unsafe {
             ray_tracing.pipeline_fn.cmd_trace_rays(
@@ -382,7 +379,7 @@ impl VkCommandBuffer {
 
     pub fn begin_rendering(
         &self,
-        image_view: &VkImageView,
+        image_view: &ImageView,
         extent: vk::Extent2D,
         load_op: vk::AttachmentLoadOp,
         clear_color: Option<[f32; 4]>,
@@ -447,7 +444,7 @@ impl VkCommandBuffer {
 
     pub fn reset_all_timestamp_queries_from_pool<const C: usize>(
         &self,
-        pool: &VkTimestampQueryPool<C>,
+        pool: &TimestampQueryPool<C>,
     ) {
         unsafe {
             self.device
@@ -459,7 +456,7 @@ impl VkCommandBuffer {
     pub fn write_timestamp<const C: usize>(
         &self,
         stage: vk::PipelineStageFlags2,
-        pool: &VkTimestampQueryPool<C>,
+        pool: &TimestampQueryPool<C>,
         query_index: u32,
     ) {
         assert!(query_index < C as _, "Query index must be < {C}");
@@ -473,8 +470,8 @@ impl VkCommandBuffer {
 }
 
 #[derive(Clone, Copy)]
-pub struct VkBufferBarrier<'a> {
-    pub buffer: &'a VkBuffer,
+pub struct BufferBarrier<'a> {
+    pub buffer: &'a Buffer,
     pub src_access_mask: vk::AccessFlags2,
     pub dst_access_mask: vk::AccessFlags2,
     pub src_stage_mask: vk::PipelineStageFlags2,
@@ -482,8 +479,8 @@ pub struct VkBufferBarrier<'a> {
 }
 
 #[derive(Clone, Copy)]
-pub struct VkImageBarrier<'a> {
-    pub image: &'a VkImage,
+pub struct ImageBarrier<'a> {
+    pub image: &'a Image,
     pub old_layout: vk::ImageLayout,
     pub new_layout: vk::ImageLayout,
     pub src_access_mask: vk::AccessFlags2,

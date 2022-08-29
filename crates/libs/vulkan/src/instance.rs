@@ -1,23 +1,23 @@
 use std::ffi::{c_void, CStr, CString};
 
 use anyhow::Result;
-use ash::{extensions::ext::DebugUtils, vk, Entry, Instance};
+use ash::{extensions::ext::DebugUtils, vk, Entry, Instance as AshInstance};
 use raw_window_handle::HasRawWindowHandle;
 
-use crate::{physical_device::VkPhysicalDevice, surface::VkSurface, VkVersion};
+use crate::{physical_device::PhysicalDevice, surface::Surface, Version};
 
-pub struct VkInstance {
-    pub(crate) inner: Instance,
+pub struct Instance {
+    pub(crate) inner: AshInstance,
     debug_utils: DebugUtils,
     debug_utils_messenger: vk::DebugUtilsMessengerEXT,
-    physical_devices: Vec<VkPhysicalDevice>,
+    physical_devices: Vec<PhysicalDevice>,
 }
 
-impl VkInstance {
+impl Instance {
     pub(crate) fn new(
         entry: &Entry,
         window: &dyn HasRawWindowHandle,
-        api_version: VkVersion,
+        api_version: Version,
         app_name: &str,
     ) -> Result<Self> {
         // Vulkan instance
@@ -65,14 +65,14 @@ impl VkInstance {
 
     pub(crate) fn enumerate_physical_devices(
         &mut self,
-        surface: &VkSurface,
-    ) -> Result<&[VkPhysicalDevice]> {
+        surface: &Surface,
+    ) -> Result<&[PhysicalDevice]> {
         if self.physical_devices.is_empty() {
             let physical_devices = unsafe { self.inner.enumerate_physical_devices()? };
 
             let mut physical_devices = physical_devices
                 .into_iter()
-                .map(|pd| VkPhysicalDevice::new(&self.inner, surface, pd))
+                .map(|pd| PhysicalDevice::new(&self.inner, surface, pd))
                 .collect::<Result<Vec<_>>>()?;
 
             physical_devices.sort_by_key(|pd| match pd.device_type {
@@ -106,7 +106,7 @@ unsafe extern "system" fn vulkan_debug_callback(
     vk::FALSE
 }
 
-impl Drop for VkInstance {
+impl Drop for Instance {
     fn drop(&mut self) {
         unsafe {
             self.debug_utils

@@ -3,18 +3,16 @@ use std::sync::Arc;
 use anyhow::Result;
 use ash::vk;
 
-use crate::{
-    device::VkDevice, VkAccelerationStructure, VkBuffer, VkContext, VkImageView, VkSampler,
-};
+use crate::{device::Device, AccelerationStructure, Buffer, Context, ImageView, Sampler};
 
-pub struct VkDescriptorSetLayout {
-    device: Arc<VkDevice>,
+pub struct DescriptorSetLayout {
+    device: Arc<Device>,
     pub(crate) inner: vk::DescriptorSetLayout,
 }
 
-impl VkDescriptorSetLayout {
+impl DescriptorSetLayout {
     pub(crate) fn new(
-        device: Arc<VkDevice>,
+        device: Arc<Device>,
         bindings: &[vk::DescriptorSetLayoutBinding],
     ) -> Result<Self> {
         let dsl_info = vk::DescriptorSetLayoutCreateInfo::builder().bindings(bindings);
@@ -24,7 +22,7 @@ impl VkDescriptorSetLayout {
     }
 }
 
-impl Drop for VkDescriptorSetLayout {
+impl Drop for DescriptorSetLayout {
     fn drop(&mut self) {
         unsafe {
             self.device
@@ -34,14 +32,14 @@ impl Drop for VkDescriptorSetLayout {
     }
 }
 
-pub struct VkDescriptorPool {
-    device: Arc<VkDevice>,
+pub struct DescriptorPool {
+    device: Arc<Device>,
     pub(crate) inner: vk::DescriptorPool,
 }
 
-impl VkDescriptorPool {
+impl DescriptorPool {
     pub(crate) fn new(
-        device: Arc<VkDevice>,
+        device: Arc<Device>,
         max_sets: u32,
         pool_sizes: &[vk::DescriptorPoolSize],
     ) -> Result<Self> {
@@ -55,9 +53,9 @@ impl VkDescriptorPool {
 
     pub fn allocate_sets(
         &self,
-        layout: &VkDescriptorSetLayout,
+        layout: &DescriptorSetLayout,
         count: u32,
-    ) -> Result<Vec<VkDescriptorSet>> {
+    ) -> Result<Vec<DescriptorSet>> {
         let layouts = (0..count).map(|_| layout.inner).collect::<Vec<_>>();
         let sets_alloc_info = vk::DescriptorSetAllocateInfo::builder()
             .descriptor_pool(self.inner)
@@ -69,7 +67,7 @@ impl VkDescriptorPool {
         };
         let sets = sets
             .into_iter()
-            .map(|inner| VkDescriptorSet {
+            .map(|inner| DescriptorSet {
                 device: self.device.clone(),
                 inner,
             })
@@ -78,25 +76,25 @@ impl VkDescriptorPool {
         Ok(sets)
     }
 
-    pub fn allocate_set(&self, layout: &VkDescriptorSetLayout) -> Result<VkDescriptorSet> {
+    pub fn allocate_set(&self, layout: &DescriptorSetLayout) -> Result<DescriptorSet> {
         Ok(self.allocate_sets(layout, 1)?.into_iter().next().unwrap())
     }
 }
 
-impl Drop for VkDescriptorPool {
+impl Drop for DescriptorPool {
     fn drop(&mut self) {
         unsafe { self.device.inner.destroy_descriptor_pool(self.inner, None) };
     }
 }
 
-pub struct VkDescriptorSet {
-    device: Arc<VkDevice>,
+pub struct DescriptorSet {
+    device: Arc<Device>,
     pub(crate) inner: vk::DescriptorSet,
 }
 
-impl VkDescriptorSet {
-    pub fn update(&self, writes: &[VkWriteDescriptorSet]) {
-        use VkWriteDescriptorSetKind::*;
+impl DescriptorSet {
+    pub fn update(&self, writes: &[WriteDescriptorSet]) {
+        use WriteDescriptorSetKind::*;
 
         // these Vec are here to keep structure internal to WriteDescriptorSet (DescriptorImageInfo, DescriptorBufferInfo, ...) alive
         let mut img_infos = vec![];
@@ -198,47 +196,47 @@ impl VkDescriptorSet {
     }
 }
 
-impl VkContext {
+impl Context {
     pub fn create_descriptor_set_layout(
         &self,
         bindings: &[vk::DescriptorSetLayoutBinding],
-    ) -> Result<VkDescriptorSetLayout> {
-        VkDescriptorSetLayout::new(self.device.clone(), bindings)
+    ) -> Result<DescriptorSetLayout> {
+        DescriptorSetLayout::new(self.device.clone(), bindings)
     }
 
     pub fn create_descriptor_pool(
         &self,
         max_sets: u32,
         pool_sizes: &[vk::DescriptorPoolSize],
-    ) -> Result<VkDescriptorPool> {
-        VkDescriptorPool::new(self.device.clone(), max_sets, pool_sizes)
+    ) -> Result<DescriptorPool> {
+        DescriptorPool::new(self.device.clone(), max_sets, pool_sizes)
     }
 }
 
 #[derive(Clone, Copy)]
-pub struct VkWriteDescriptorSet<'a> {
+pub struct WriteDescriptorSet<'a> {
     pub binding: u32,
-    pub kind: VkWriteDescriptorSetKind<'a>,
+    pub kind: WriteDescriptorSetKind<'a>,
 }
 
 #[derive(Clone, Copy)]
-pub enum VkWriteDescriptorSetKind<'a> {
+pub enum WriteDescriptorSetKind<'a> {
     StorageImage {
-        view: &'a VkImageView,
+        view: &'a ImageView,
         layout: vk::ImageLayout,
     },
     AccelerationStructure {
-        acceleration_structure: &'a VkAccelerationStructure,
+        acceleration_structure: &'a AccelerationStructure,
     },
     UniformBuffer {
-        buffer: &'a VkBuffer,
+        buffer: &'a Buffer,
     },
     StorageBuffer {
-        buffer: &'a VkBuffer,
+        buffer: &'a Buffer,
     },
     CombinedImageSampler {
-        view: &'a VkImageView,
-        sampler: &'a VkSampler,
+        view: &'a ImageView,
+        sampler: &'a Sampler,
         layout: vk::ImageLayout,
     },
 }

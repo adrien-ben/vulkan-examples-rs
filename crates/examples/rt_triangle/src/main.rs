@@ -1,7 +1,7 @@
 use app::anyhow::Result;
 use app::vulkan::ash::vk::{self, Packed24_8};
 use app::vulkan::utils::*;
-use app::vulkan::*;
+use app::{vulkan::*, BaseApp};
 use app::{App, ImageAndView};
 use std::mem::size_of;
 use std::time::Duration;
@@ -18,14 +18,14 @@ struct Triangle {
     _bottom_as: BottomAS,
     _top_as: TopAS,
     pipeline_res: PipelineRes,
-    sbt: VkShaderBindingTable,
+    sbt: ShaderBindingTable,
     descriptor_res: DescriptorRes,
 }
 
 impl App for Triangle {
     type Gui = ();
 
-    fn new(base: &mut app::BaseApp<Self>) -> Result<Self> {
+    fn new(base: &mut BaseApp<Self>) -> Result<Self> {
         let context = &mut base.context;
 
         let bottom_as = create_bottom_as(context)?;
@@ -54,7 +54,7 @@ impl App for Triangle {
 
     fn update(
         &mut self,
-        _: &app::BaseApp<Self>,
+        _: &BaseApp<Self>,
         _: &mut <Self as App>::Gui,
         _: usize,
         _: Duration,
@@ -64,8 +64,8 @@ impl App for Triangle {
 
     fn record_raytracing_commands(
         &self,
-        base: &app::BaseApp<Self>,
-        buffer: &VkCommandBuffer,
+        base: &BaseApp<Self>,
+        buffer: &CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
         let static_set = &self.descriptor_res.static_set;
@@ -89,16 +89,16 @@ impl App for Triangle {
         Ok(())
     }
 
-    fn on_recreate_swapchain(&mut self, base: &app::BaseApp<Self>) -> Result<()> {
+    fn on_recreate_swapchain(&mut self, base: &BaseApp<Self>) -> Result<()> {
         base.storage_images
             .iter()
             .enumerate()
             .for_each(|(index, img)| {
                 let set = &self.descriptor_res.dynamic_sets[index];
 
-                set.update(&[VkWriteDescriptorSet {
+                set.update(&[WriteDescriptorSet {
                     binding: 1,
-                    kind: VkWriteDescriptorSetKind::StorageImage {
+                    kind: WriteDescriptorSetKind::StorageImage {
                         layout: vk::ImageLayout::GENERAL,
                         view: &img.view,
                     },
@@ -110,30 +110,30 @@ impl App for Triangle {
 }
 
 struct BottomAS {
-    inner: VkAccelerationStructure,
-    _vertex_buffer: VkBuffer,
-    _index_buffer: VkBuffer,
+    inner: AccelerationStructure,
+    _vertex_buffer: Buffer,
+    _index_buffer: Buffer,
 }
 
 struct TopAS {
-    inner: VkAccelerationStructure,
-    _instance_buffer: VkBuffer,
+    inner: AccelerationStructure,
+    _instance_buffer: Buffer,
 }
 
 struct PipelineRes {
-    pipeline: VkRTPipeline,
-    pipeline_layout: VkPipelineLayout,
-    static_dsl: VkDescriptorSetLayout,
-    dynamic_dsl: VkDescriptorSetLayout,
+    pipeline: RayTracingPipeline,
+    pipeline_layout: PipelineLayout,
+    static_dsl: DescriptorSetLayout,
+    dynamic_dsl: DescriptorSetLayout,
 }
 
 struct DescriptorRes {
-    _pool: VkDescriptorPool,
-    static_set: VkDescriptorSet,
-    dynamic_sets: Vec<VkDescriptorSet>,
+    _pool: DescriptorPool,
+    static_set: DescriptorSet,
+    dynamic_sets: Vec<DescriptorSet>,
 }
 
-fn create_bottom_as(context: &mut VkContext) -> Result<BottomAS> {
+fn create_bottom_as(context: &mut Context) -> Result<BottomAS> {
     // Triangle geo
     #[derive(Debug, Clone, Copy)]
     #[allow(dead_code)]
@@ -206,7 +206,7 @@ fn create_bottom_as(context: &mut VkContext) -> Result<BottomAS> {
     })
 }
 
-fn create_top_as(context: &mut VkContext, bottom_as: &BottomAS) -> Result<TopAS> {
+fn create_top_as(context: &mut Context, bottom_as: &BottomAS) -> Result<TopAS> {
     #[rustfmt::skip]
     let transform_matrix = vk::TransformMatrixKHR { matrix: [
         1.0, 0.0, 0.0, 0.0,
@@ -269,7 +269,7 @@ fn create_top_as(context: &mut VkContext, bottom_as: &BottomAS) -> Result<TopAS>
     })
 }
 
-fn create_pipeline(context: &VkContext) -> Result<PipelineRes> {
+fn create_pipeline(context: &Context) -> Result<PipelineRes> {
     // descriptor and pipeline layouts
     let static_layout_bindings = [vk::DescriptorSetLayoutBinding::builder()
         .binding(0)
@@ -293,24 +293,24 @@ fn create_pipeline(context: &VkContext) -> Result<PipelineRes> {
 
     // Shaders
     let shaders_create_info = [
-        VkRTShaderCreateInfo {
+        RayTracingShaderCreateInfo {
             source: &include_bytes!("../shaders/raygen.rgen.spv")[..],
             stage: vk::ShaderStageFlags::RAYGEN_KHR,
-            group: VkRTShaderGroup::RayGen,
+            group: RayTracingShaderGroup::RayGen,
         },
-        VkRTShaderCreateInfo {
+        RayTracingShaderCreateInfo {
             source: &include_bytes!("../shaders/miss.rmiss.spv")[..],
             stage: vk::ShaderStageFlags::MISS_KHR,
-            group: VkRTShaderGroup::Miss,
+            group: RayTracingShaderGroup::Miss,
         },
-        VkRTShaderCreateInfo {
+        RayTracingShaderCreateInfo {
             source: &include_bytes!("../shaders/closesthit.rchit.spv")[..],
             stage: vk::ShaderStageFlags::CLOSEST_HIT_KHR,
-            group: VkRTShaderGroup::ClosestHit,
+            group: RayTracingShaderGroup::ClosestHit,
         },
     ];
 
-    let pipeline_create_info = VkRTPipelineCreateInfo {
+    let pipeline_create_info = RayTracingPipelineCreateInfo {
         shaders: &shaders_create_info,
         max_ray_recursion_depth: 1,
     };
@@ -326,7 +326,7 @@ fn create_pipeline(context: &VkContext) -> Result<PipelineRes> {
 }
 
 fn create_descriptor_sets(
-    context: &VkContext,
+    context: &Context,
     pipeline_res: &PipelineRes,
     top_as: &TopAS,
     storage_imgs: &[ImageAndView],
@@ -349,17 +349,17 @@ fn create_descriptor_sets(
     let static_set = pool.allocate_set(&pipeline_res.static_dsl)?;
     let dynamic_sets = pool.allocate_sets(&pipeline_res.dynamic_dsl, set_count)?;
 
-    static_set.update(&[VkWriteDescriptorSet {
+    static_set.update(&[WriteDescriptorSet {
         binding: 0,
-        kind: VkWriteDescriptorSetKind::AccelerationStructure {
+        kind: WriteDescriptorSetKind::AccelerationStructure {
             acceleration_structure: &top_as.inner,
         },
     }]);
 
     dynamic_sets.iter().enumerate().for_each(|(index, set)| {
-        set.update(&[VkWriteDescriptorSet {
+        set.update(&[WriteDescriptorSet {
             binding: 1,
-            kind: VkWriteDescriptorSetKind::StorageImage {
+            kind: WriteDescriptorSetKind::StorageImage {
                 layout: vk::ImageLayout::GENERAL,
                 view: &storage_imgs[index].view,
             },

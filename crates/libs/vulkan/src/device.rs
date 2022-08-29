@@ -1,25 +1,25 @@
 use std::{ffi::CString, sync::Arc};
 
 use anyhow::Result;
-use ash::{vk, Device};
+use ash::{vk, Device as AshDevice};
 
 use crate::{
-    instance::VkInstance,
-    physical_device::VkPhysicalDevice,
-    queue::{VkQueue, VkQueueFamily},
+    instance::Instance,
+    physical_device::PhysicalDevice,
+    queue::{Queue, QueueFamily},
 };
 
-pub struct VkDevice {
-    pub inner: Device,
+pub struct Device {
+    pub inner: AshDevice,
 }
 
-impl VkDevice {
+impl Device {
     pub(crate) fn new(
-        instance: &VkInstance,
-        physical_device: &VkPhysicalDevice,
-        queue_families: &[VkQueueFamily],
+        instance: &Instance,
+        physical_device: &PhysicalDevice,
+        queue_families: &[QueueFamily],
         required_extensions: &[&str],
-        device_features: &VkDeviceFeatures,
+        device_features: &DeviceFeatures,
     ) -> Result<Self> {
         let queue_priorities = [1.0f32];
 
@@ -80,13 +80,13 @@ impl VkDevice {
         Ok(Self { inner })
     }
 
-    pub fn get_queue(self: &Arc<Self>, queue_family: VkQueueFamily, queue_index: u32) -> VkQueue {
+    pub fn get_queue(self: &Arc<Self>, queue_family: QueueFamily, queue_index: u32) -> Queue {
         let inner = unsafe { self.inner.get_device_queue(queue_family.index, queue_index) };
-        VkQueue::new(self.clone(), inner)
+        Queue::new(self.clone(), inner)
     }
 }
 
-impl Drop for VkDevice {
+impl Drop for Device {
     fn drop(&mut self) {
         unsafe {
             self.inner.destroy_device(None);
@@ -95,7 +95,7 @@ impl Drop for VkDevice {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct VkDeviceFeatures {
+pub struct DeviceFeatures {
     pub ray_tracing_pipeline: bool,
     pub acceleration_structure: bool,
     pub runtime_descriptor_array: bool,
@@ -104,7 +104,7 @@ pub struct VkDeviceFeatures {
     pub synchronization2: bool,
 }
 
-impl VkDeviceFeatures {
+impl DeviceFeatures {
     pub fn is_compatible_with(&self, requirements: &Self) -> bool {
         (!requirements.ray_tracing_pipeline || self.ray_tracing_pipeline)
             && (!requirements.acceleration_structure || self.acceleration_structure)

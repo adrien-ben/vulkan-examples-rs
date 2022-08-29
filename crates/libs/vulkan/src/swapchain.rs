@@ -1,29 +1,29 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use ash::{extensions::khr::Swapchain, vk};
+use ash::{extensions::khr::Swapchain as AshSwapchain, vk};
 
-use crate::{device::VkDevice, VkContext, VkImage, VkImageView, VkQueue, VkSemaphore};
+use crate::{device::Device, Context, Image, ImageView, Queue, Semaphore};
 
 pub struct AcquiredImage {
     pub index: u32,
     pub is_suboptimal: bool,
 }
 
-pub struct VkSwapchain {
-    device: Arc<VkDevice>,
-    inner: Swapchain,
+pub struct Swapchain {
+    device: Arc<Device>,
+    inner: AshSwapchain,
     swapchain_khr: vk::SwapchainKHR,
     pub extent: vk::Extent2D,
     pub format: vk::Format,
     pub color_space: vk::ColorSpaceKHR,
     pub present_mode: vk::PresentModeKHR,
-    pub images: Vec<VkImage>,
-    pub views: Vec<VkImageView>,
+    pub images: Vec<Image>,
+    pub views: Vec<ImageView>,
 }
 
-impl VkSwapchain {
-    pub fn new(context: &VkContext, width: u32, height: u32) -> Result<Self> {
+impl Swapchain {
+    pub fn new(context: &Context, width: u32, height: u32) -> Result<Self> {
         log::debug!("Creating vulkan swapchain");
 
         let device = context.device.clone();
@@ -134,7 +134,7 @@ impl VkSwapchain {
                 .clipped(true)
         };
 
-        let inner = Swapchain::new(&context.instance.inner, &context.device.inner);
+        let inner = AshSwapchain::new(&context.instance.inner, &context.device.inner);
         let swapchain_khr = unsafe { inner.create_swapchain(&create_info, None)? };
 
         // Swapchain images and image views
@@ -142,7 +142,7 @@ impl VkSwapchain {
         let images = images
             .into_iter()
             .map(|i| {
-                VkImage::from_swapchain_image(
+                Image::from_swapchain_image(
                     device.clone(),
                     context.allocator.clone(),
                     i,
@@ -154,7 +154,7 @@ impl VkSwapchain {
 
         let views = images
             .iter()
-            .map(VkImage::create_image_view)
+            .map(Image::create_image_view)
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Self {
@@ -170,7 +170,7 @@ impl VkSwapchain {
         })
     }
 
-    pub fn resize(&mut self, context: &VkContext, width: u32, height: u32) -> Result<()> {
+    pub fn resize(&mut self, context: &Context, width: u32, height: u32) -> Result<()> {
         log::debug!("Resizing vulkan swapchain to {width}x{height}");
 
         self.destroy();
@@ -242,7 +242,7 @@ impl VkSwapchain {
         let images = images
             .into_iter()
             .map(|i| {
-                VkImage::from_swapchain_image(
+                Image::from_swapchain_image(
                     self.device.clone(),
                     context.allocator.clone(),
                     i,
@@ -254,7 +254,7 @@ impl VkSwapchain {
 
         let views = images
             .iter()
-            .map(VkImage::create_image_view)
+            .map(Image::create_image_view)
             .collect::<Result<Vec<_>, _>>()?;
 
         self.swapchain_khr = swapchain_khr;
@@ -265,11 +265,7 @@ impl VkSwapchain {
         Ok(())
     }
 
-    pub fn acquire_next_image(
-        &self,
-        timeout: u64,
-        semaphore: &VkSemaphore,
-    ) -> Result<AcquiredImage> {
+    pub fn acquire_next_image(&self, timeout: u64, semaphore: &Semaphore) -> Result<AcquiredImage> {
         let (index, is_suboptimal) = unsafe {
             self.inner.acquire_next_image(
                 self.swapchain_khr,
@@ -288,8 +284,8 @@ impl VkSwapchain {
     pub fn queue_present(
         &self,
         image_index: u32,
-        wait_semaphores: &[&VkSemaphore],
-        queue: &VkQueue,
+        wait_semaphores: &[&Semaphore],
+        queue: &Queue,
     ) -> Result<bool> {
         let swapchains = [self.swapchain_khr];
         let images_indices = [image_index];
@@ -314,7 +310,7 @@ impl VkSwapchain {
     }
 }
 
-impl Drop for VkSwapchain {
+impl Drop for Swapchain {
     fn drop(&mut self) {
         self.destroy();
     }

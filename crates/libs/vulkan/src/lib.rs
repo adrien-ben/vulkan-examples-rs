@@ -35,20 +35,20 @@ pub use sampler::*;
 pub use swapchain::*;
 pub use sync::*;
 
-pub const VERSION_1_0: VkVersion = VkVersion::from_major_minor(1, 0);
-pub const VERSION_1_1: VkVersion = VkVersion::from_major_minor(1, 1);
-pub const VERSION_1_2: VkVersion = VkVersion::from_major_minor(1, 2);
-pub const VERSION_1_3: VkVersion = VkVersion::from_major_minor(1, 3);
+pub const VERSION_1_0: Version = Version::from_major_minor(1, 0);
+pub const VERSION_1_1: Version = Version::from_major_minor(1, 1);
+pub const VERSION_1_2: Version = Version::from_major_minor(1, 2);
+pub const VERSION_1_3: Version = Version::from_major_minor(1, 3);
 
 #[derive(Debug, Clone, Copy)]
-pub struct VkVersion {
+pub struct Version {
     pub variant: u32,
     pub major: u32,
     pub minor: u32,
     pub patch: u32,
 }
 
-impl VkVersion {
+impl Version {
     pub const fn new(variant: u32, major: u32, minor: u32, patch: u32) -> Self {
         Self {
             variant,

@@ -9,39 +9,39 @@ use gpu_allocator::{
 use raw_window_handle::HasRawWindowHandle;
 
 use crate::{
-    device::{VkDevice, VkDeviceFeatures},
-    instance::VkInstance,
-    physical_device::VkPhysicalDevice,
-    queue::{VkQueue, VkQueueFamily},
-    surface::VkSurface,
-    VkCommandBuffer, VkCommandPool, VkRayTracingContext, VkVersion, VERSION_1_0,
+    device::{Device, DeviceFeatures},
+    instance::Instance,
+    physical_device::PhysicalDevice,
+    queue::{Queue, QueueFamily},
+    surface::Surface,
+    CommandBuffer, CommandPool, RayTracingContext, Version, VERSION_1_0,
 };
 
-pub struct VkContext {
+pub struct Context {
     pub allocator: Arc<Mutex<Allocator>>,
-    pub command_pool: VkCommandPool,
-    pub ray_tracing: Option<Arc<VkRayTracingContext>>,
-    pub graphics_queue: VkQueue,
-    pub present_queue: VkQueue,
-    pub device: Arc<VkDevice>,
-    pub present_queue_family: VkQueueFamily,
-    pub graphics_queue_family: VkQueueFamily,
-    pub physical_device: VkPhysicalDevice,
-    pub surface: VkSurface,
-    pub instance: VkInstance,
+    pub command_pool: CommandPool,
+    pub ray_tracing: Option<Arc<RayTracingContext>>,
+    pub graphics_queue: Queue,
+    pub present_queue: Queue,
+    pub device: Arc<Device>,
+    pub present_queue_family: QueueFamily,
+    pub graphics_queue_family: QueueFamily,
+    pub physical_device: PhysicalDevice,
+    pub surface: Surface,
+    pub instance: Instance,
     _entry: Entry,
 }
 
-pub struct VkContextBuilder<'a> {
+pub struct ContextBuilder<'a> {
     window: &'a dyn HasRawWindowHandle,
-    vulkan_version: VkVersion,
+    vulkan_version: Version,
     app_name: &'a str,
     required_extensions: &'a [&'a str],
-    required_device_features: VkDeviceFeatures,
+    required_device_features: DeviceFeatures,
     with_raytracing_context: bool,
 }
 
-impl<'a> VkContextBuilder<'a> {
+impl<'a> ContextBuilder<'a> {
     pub fn new(window: &'a dyn HasRawWindowHandle) -> Self {
         Self {
             window,
@@ -53,7 +53,7 @@ impl<'a> VkContextBuilder<'a> {
         }
     }
 
-    pub fn vulkan_version(self, vulkan_version: VkVersion) -> Self {
+    pub fn vulkan_version(self, vulkan_version: Version) -> Self {
         Self {
             vulkan_version,
             ..self
@@ -71,7 +71,7 @@ impl<'a> VkContextBuilder<'a> {
         }
     }
 
-    pub fn required_device_features(self, required_device_features: VkDeviceFeatures) -> Self {
+    pub fn required_device_features(self, required_device_features: DeviceFeatures) -> Self {
         Self {
             required_device_features,
             ..self
@@ -85,28 +85,28 @@ impl<'a> VkContextBuilder<'a> {
         }
     }
 
-    pub fn build(self) -> Result<VkContext> {
-        VkContext::new(self)
+    pub fn build(self) -> Result<Context> {
+        Context::new(self)
     }
 }
 
-impl VkContext {
+impl Context {
     fn new(
-        VkContextBuilder {
+        ContextBuilder {
             window,
             vulkan_version,
             app_name,
             required_extensions,
             required_device_features,
             with_raytracing_context,
-        }: VkContextBuilder,
+        }: ContextBuilder,
     ) -> Result<Self> {
         // Vulkan instance
         let entry = Entry::linked();
-        let mut instance = VkInstance::new(&entry, window, vulkan_version, app_name)?;
+        let mut instance = Instance::new(&entry, window, vulkan_version, app_name)?;
 
         // Vulkan surface
-        let surface = VkSurface::new(&entry, &instance, &window)?;
+        let surface = Surface::new(&entry, &instance, &window)?;
 
         let physical_devices = instance.enumerate_physical_devices(&surface)?;
         let (physical_device, graphics_queue_family, present_queue_family) =
@@ -118,7 +118,7 @@ impl VkContext {
         log::info!("Selected physical device: {:?}", physical_device.name);
 
         let queue_families = [graphics_queue_family, present_queue_family];
-        let device = Arc::new(VkDevice::new(
+        let device = Arc::new(Device::new(
             &instance,
             &physical_device,
             &queue_families,
@@ -129,11 +129,8 @@ impl VkContext {
         let present_queue = device.get_queue(present_queue_family, 0);
 
         let ray_tracing = with_raytracing_context.then(|| {
-            let ray_tracing = Arc::new(VkRayTracingContext::new(
-                &instance,
-                &physical_device,
-                &device,
-            ));
+            let ray_tracing =
+                Arc::new(RayTracingContext::new(&instance, &physical_device, &device));
             log::debug!(
                 "Ray tracing pipeline properties {:#?}",
                 ray_tracing.pipeline_properties
@@ -145,7 +142,7 @@ impl VkContext {
             ray_tracing
         });
 
-        let command_pool = VkCommandPool::new(
+        let command_pool = CommandPool::new(
             device.clone(),
             ray_tracing.clone(),
             graphics_queue_family,
@@ -183,10 +180,10 @@ impl VkContext {
 }
 
 fn select_suitable_physical_device(
-    devices: &[VkPhysicalDevice],
+    devices: &[PhysicalDevice],
     required_extensions: &[&str],
-    required_device_features: &VkDeviceFeatures,
-) -> Result<(VkPhysicalDevice, VkQueueFamily, VkQueueFamily)> {
+    required_device_features: &DeviceFeatures,
+) -> Result<(PhysicalDevice, QueueFamily, QueueFamily)> {
     log::debug!("Choosing Vulkan physical device");
 
     let mut graphics = None;
@@ -231,14 +228,14 @@ fn select_suitable_physical_device(
     Ok((device.clone(), graphics.unwrap(), present.unwrap()))
 }
 
-impl VkContext {
+impl Context {
     pub fn device_wait_idle(&self) -> Result<()> {
         unsafe { self.device.inner.device_wait_idle()? };
 
         Ok(())
     }
 
-    pub fn execute_one_time_commands<R, F: FnOnce(&VkCommandBuffer) -> R>(
+    pub fn execute_one_time_commands<R, F: FnOnce(&CommandBuffer) -> R>(
         &self,
         executor: F,
     ) -> Result<R> {

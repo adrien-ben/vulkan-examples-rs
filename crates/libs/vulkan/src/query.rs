@@ -3,15 +3,15 @@ use std::sync::Arc;
 use anyhow::Result;
 use ash::vk;
 
-use crate::{VkContext, VkDevice};
+use crate::{Context, Device};
 
-pub struct VkTimestampQueryPool<const C: usize> {
-    device: Arc<VkDevice>,
+pub struct TimestampQueryPool<const C: usize> {
+    device: Arc<Device>,
     pub(crate) inner: vk::QueryPool,
 }
 
-impl<const C: usize> VkTimestampQueryPool<C> {
-    pub(crate) fn new(device: Arc<VkDevice>) -> Result<Self> {
+impl<const C: usize> TimestampQueryPool<C> {
+    pub(crate) fn new(device: Arc<Device>) -> Result<Self> {
         let create_info = vk::QueryPoolCreateInfo::builder()
             .query_type(vk::QueryType::TIMESTAMP)
             .query_count(C as _);
@@ -22,13 +22,13 @@ impl<const C: usize> VkTimestampQueryPool<C> {
     }
 }
 
-impl VkContext {
-    pub fn create_timestamp_query_pool<const C: usize>(&self) -> Result<VkTimestampQueryPool<C>> {
-        VkTimestampQueryPool::new(self.device.clone())
+impl Context {
+    pub fn create_timestamp_query_pool<const C: usize>(&self) -> Result<TimestampQueryPool<C>> {
+        TimestampQueryPool::new(self.device.clone())
     }
 }
 
-impl<const C: usize> Drop for VkTimestampQueryPool<C> {
+impl<const C: usize> Drop for TimestampQueryPool<C> {
     fn drop(&mut self) {
         unsafe {
             self.device.inner.destroy_query_pool(self.inner, None);
@@ -36,7 +36,7 @@ impl<const C: usize> Drop for VkTimestampQueryPool<C> {
     }
 }
 
-impl<const C: usize> VkTimestampQueryPool<C> {
+impl<const C: usize> TimestampQueryPool<C> {
     pub fn reset_all(&self) {
         unsafe {
             self.device.inner.reset_query_pool(self.inner, 0, C as _);

@@ -33,12 +33,12 @@ const IN_FLIGHT_FRAMES: u32 = 2;
 pub struct BaseApp<B: App> {
     phantom: PhantomData<B>,
     raytracing_enabled: bool,
-    pub swapchain: VkSwapchain,
-    pub command_pool: VkCommandPool,
+    pub swapchain: Swapchain,
+    pub command_pool: CommandPool,
     pub storage_images: Vec<ImageAndView>,
-    command_buffers: Vec<VkCommandBuffer>,
+    command_buffers: Vec<CommandBuffer>,
     in_flight_frames: InFlightFrames,
-    pub context: VkContext,
+    pub context: Context,
     pub camera: Camera,
     display_stats: bool,
 }
@@ -59,7 +59,7 @@ pub trait App: Sized {
     fn record_raytracing_commands(
         &self,
         base: &BaseApp<Self>,
-        buffer: &VkCommandBuffer,
+        buffer: &CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
         // prevents reports of unused parameters without needing to use #[allow]
@@ -73,7 +73,7 @@ pub trait App: Sized {
     fn record_raster_commands(
         &self,
         base: &BaseApp<Self>,
-        buffer: &VkCommandBuffer,
+        buffer: &CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
         // prevents reports of unused parameters without needing to use #[allow]
@@ -257,11 +257,11 @@ impl<B: App> BaseApp<B> {
             required_extensions.push("VK_KHR_deferred_host_operations");
         }
 
-        let mut context = VkContextBuilder::new(window)
+        let mut context = ContextBuilder::new(window)
             .vulkan_version(VERSION_1_3)
             .app_name(app_name)
             .required_extensions(&required_extensions)
-            .required_device_features(VkDeviceFeatures {
+            .required_device_features(DeviceFeatures {
                 ray_tracing_pipeline: enable_raytracing,
                 acceleration_structure: enable_raytracing,
                 runtime_descriptor_array: enable_raytracing,
@@ -277,7 +277,7 @@ impl<B: App> BaseApp<B> {
             Some(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER),
         )?;
 
-        let swapchain = VkSwapchain::new(
+        let swapchain = Swapchain::new(
             &context,
             window.inner_size().width,
             window.inner_size().height,
@@ -424,11 +424,11 @@ impl<B: App> BaseApp<B> {
 
         self.context.graphics_queue.submit(
             command_buffer,
-            Some(VkSemaphoreSubmitInfo {
+            Some(SemaphoreSubmitInfo {
                 semaphore: self.in_flight_frames.image_available_semaphore(),
                 stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
             }),
-            Some(VkSemaphoreSubmitInfo {
+            Some(SemaphoreSubmitInfo {
                 semaphore: self.in_flight_frames.render_finished_semaphore(),
                 stage_mask: vk::PipelineStageFlags2::ALL_COMMANDS,
             }),
@@ -455,7 +455,7 @@ impl<B: App> BaseApp<B> {
 
     fn record_command_buffer(
         &self,
-        buffer: &VkCommandBuffer,
+        buffer: &CommandBuffer,
         image_index: usize,
         base_app: &B,
         gui_renderer: &mut Renderer,
@@ -482,7 +482,7 @@ impl<B: App> BaseApp<B> {
             let storage_image = &self.storage_images[image_index].image;
             // Copy ray tracing result into swapchain
             buffer.pipeline_image_barriers(&[
-                VkImageBarrier {
+                ImageBarrier {
                     image: swapchain_image,
                     old_layout: vk::ImageLayout::UNDEFINED,
                     new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
@@ -491,7 +491,7 @@ impl<B: App> BaseApp<B> {
                     src_stage_mask: vk::PipelineStageFlags2::NONE,
                     dst_stage_mask: vk::PipelineStageFlags2::TRANSFER,
                 },
-                VkImageBarrier {
+                ImageBarrier {
                     image: storage_image,
                     old_layout: vk::ImageLayout::GENERAL,
                     new_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
@@ -510,7 +510,7 @@ impl<B: App> BaseApp<B> {
             );
 
             buffer.pipeline_image_barriers(&[
-                VkImageBarrier {
+                ImageBarrier {
                     image: swapchain_image,
                     old_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                     new_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
@@ -519,7 +519,7 @@ impl<B: App> BaseApp<B> {
                     src_stage_mask: vk::PipelineStageFlags2::TRANSFER,
                     dst_stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
                 },
-                VkImageBarrier {
+                ImageBarrier {
                     image: storage_image,
                     old_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
                     new_layout: vk::ImageLayout::GENERAL,
@@ -532,7 +532,7 @@ impl<B: App> BaseApp<B> {
         }
 
         if !self.raytracing_enabled {
-            buffer.pipeline_image_barriers(&[VkImageBarrier {
+            buffer.pipeline_image_barriers(&[ImageBarrier {
                 image: swapchain_image,
                 old_layout: vk::ImageLayout::UNDEFINED,
                 new_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
@@ -558,7 +558,7 @@ impl<B: App> BaseApp<B> {
 
         buffer.end_rendering();
 
-        buffer.pipeline_image_barriers(&[VkImageBarrier {
+        buffer.pipeline_image_barriers(&[ImageBarrier {
             image: swapchain_image,
             old_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             new_layout: vk::ImageLayout::PRESENT_SRC_KHR,
@@ -585,7 +585,7 @@ impl<B: App> BaseApp<B> {
 }
 
 fn create_storage_images(
-    context: &mut VkContext,
+    context: &mut Context,
     format: vk::Format,
     extent: vk::Extent2D,
     count: usize,
@@ -604,7 +604,7 @@ fn create_storage_images(
         let view = image.create_image_view()?;
 
         context.execute_one_time_commands(|cmd_buffer| {
-            cmd_buffer.pipeline_image_barriers(&[VkImageBarrier {
+            cmd_buffer.pipeline_image_barriers(&[ImageBarrier {
                 image: &image,
                 old_layout: vk::ImageLayout::UNDEFINED,
                 new_layout: vk::ImageLayout::GENERAL,
@@ -621,16 +621,13 @@ fn create_storage_images(
     Ok(images)
 }
 
-fn create_command_buffers(
-    pool: &VkCommandPool,
-    swapchain: &VkSwapchain,
-) -> Result<Vec<VkCommandBuffer>> {
+fn create_command_buffers(pool: &CommandPool, swapchain: &Swapchain) -> Result<Vec<CommandBuffer>> {
     pool.allocate_command_buffers(vk::CommandBufferLevel::PRIMARY, swapchain.images.len() as _)
 }
 
 pub struct ImageAndView {
-    pub view: VkImageView,
-    pub image: VkImage,
+    pub view: ImageView,
+    pub image: Image,
 }
 
 struct InFlightFrames {
@@ -639,14 +636,14 @@ struct InFlightFrames {
 }
 
 struct PerFrame {
-    image_available_semaphore: VkSemaphore,
-    render_finished_semaphore: VkSemaphore,
-    fence: VkFence,
-    timing_query_pool: VkTimestampQueryPool<2>,
+    image_available_semaphore: Semaphore,
+    render_finished_semaphore: Semaphore,
+    fence: Fence,
+    timing_query_pool: TimestampQueryPool<2>,
 }
 
 impl InFlightFrames {
-    fn new(context: &VkContext, frame_count: u32) -> Result<Self> {
+    fn new(context: &Context, frame_count: u32) -> Result<Self> {
         let sync_objects = (0..frame_count)
             .map(|_i| {
                 let image_available_semaphore = context.create_semaphore()?;
@@ -674,19 +671,19 @@ impl InFlightFrames {
         self.current_frame = (self.current_frame + 1) % self.per_frames.len();
     }
 
-    fn image_available_semaphore(&self) -> &VkSemaphore {
+    fn image_available_semaphore(&self) -> &Semaphore {
         &self.per_frames[self.current_frame].image_available_semaphore
     }
 
-    fn render_finished_semaphore(&self) -> &VkSemaphore {
+    fn render_finished_semaphore(&self) -> &Semaphore {
         &self.per_frames[self.current_frame].render_finished_semaphore
     }
 
-    fn fence(&self) -> &VkFence {
+    fn fence(&self) -> &Fence {
         &self.per_frames[self.current_frame].fence
     }
 
-    fn timing_query_pool(&self) -> &VkTimestampQueryPool<2> {
+    fn timing_query_pool(&self) -> &TimestampQueryPool<2> {
         &self.per_frames[self.current_frame].timing_query_pool
     }
 

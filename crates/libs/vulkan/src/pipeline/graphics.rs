@@ -3,16 +3,16 @@ use std::{ffi::CString, sync::Arc};
 use anyhow::Result;
 use ash::vk;
 
-use crate::{device::VkDevice, VkContext, VkPipelineLayout, VkShaderModule};
+use crate::{device::Device, Context, PipelineLayout, ShaderModule};
 
-pub struct VkGraphicsPipeline {
-    device: Arc<VkDevice>,
+pub struct GraphicsPipeline {
+    device: Arc<Device>,
     pub(crate) inner: vk::Pipeline,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct VkGraphicsPipelineCreateInfo<'a> {
-    pub shaders: &'a [VkGraphicsShaderCreateInfo<'a>],
+pub struct GraphicsPipelineCreateInfo<'a> {
+    pub shaders: &'a [GraphicsShaderCreateInfo<'a>],
     pub primitive_topology: vk::PrimitiveTopology,
     pub extent: Option<vk::Extent2D>,
     pub color_attachment_format: vk::Format,
@@ -26,16 +26,16 @@ pub trait Vertex {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct VkGraphicsShaderCreateInfo<'a> {
+pub struct GraphicsShaderCreateInfo<'a> {
     pub source: &'a [u8],
     pub stage: vk::ShaderStageFlags,
 }
 
-impl VkGraphicsPipeline {
+impl GraphicsPipeline {
     pub(crate) fn new<V: Vertex>(
-        device: Arc<VkDevice>,
-        layout: &VkPipelineLayout,
-        create_info: VkGraphicsPipelineCreateInfo,
+        device: Arc<Device>,
+        layout: &PipelineLayout,
+        create_info: GraphicsPipelineCreateInfo,
     ) -> Result<Self> {
         // shaders
         let mut shader_modules = vec![];
@@ -44,7 +44,7 @@ impl VkGraphicsPipeline {
         let entry_point_name = CString::new("main").unwrap();
 
         for shader in create_info.shaders.iter() {
-            let module = VkShaderModule::from_bytes(device.clone(), shader.source)?;
+            let module = ShaderModule::from_bytes(device.clone(), shader.source)?;
 
             let stage = vk::PipelineShaderStageCreateInfo::builder()
                 .stage(shader.stage)
@@ -169,17 +169,17 @@ impl VkGraphicsPipeline {
     }
 }
 
-impl VkContext {
+impl Context {
     pub fn create_graphics_pipeline<V: Vertex>(
         &self,
-        layout: &VkPipelineLayout,
-        create_info: VkGraphicsPipelineCreateInfo,
-    ) -> Result<VkGraphicsPipeline> {
-        VkGraphicsPipeline::new::<V>(self.device.clone(), layout, create_info)
+        layout: &PipelineLayout,
+        create_info: GraphicsPipelineCreateInfo,
+    ) -> Result<GraphicsPipeline> {
+        GraphicsPipeline::new::<V>(self.device.clone(), layout, create_info)
     }
 }
 
-impl Drop for VkGraphicsPipeline {
+impl Drop for GraphicsPipeline {
     fn drop(&mut self) {
         unsafe { self.device.inner.destroy_pipeline(self.inner, None) };
     }
