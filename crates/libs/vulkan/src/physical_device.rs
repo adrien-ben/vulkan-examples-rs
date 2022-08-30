@@ -10,6 +10,7 @@ pub struct PhysicalDevice {
     pub(crate) inner: vk::PhysicalDevice,
     pub(crate) name: String,
     pub(crate) device_type: vk::PhysicalDeviceType,
+    pub(crate) limits: vk::PhysicalDeviceLimits,
     pub(crate) queue_families: Vec<QueueFamily>,
     pub(crate) supported_extensions: Vec<String>,
     pub(crate) supported_surface_formats: Vec<vk::SurfaceFormatKHR>,
@@ -33,6 +34,7 @@ impl PhysicalDevice {
         };
 
         let device_type = props.device_type;
+        let limits = props.limits;
 
         let queue_family_properties =
             unsafe { instance.get_physical_device_queue_family_properties(inner) };
@@ -101,6 +103,7 @@ impl PhysicalDevice {
             inner,
             name,
             device_type,
+            limits,
             queue_families,
             supported_extensions,
             supported_surface_formats,

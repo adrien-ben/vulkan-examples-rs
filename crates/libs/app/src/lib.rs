@@ -137,24 +137,13 @@ pub fn run<A: App + 'static>(
         match event {
             Event::NewEvents(_) => {
                 let now = Instant::now();
-                let delta_time = now - last_frame;
-                gui_context.update_delta_time(delta_time);
+                let frame_time = now - last_frame;
+                gui_context.update_delta_time(frame_time);
                 last_frame = now;
 
+                frame_stats.set_frame_time(frame_time);
+
                 controls = controls.reset();
-
-                // Can't get for gpu time on the first frame or vkGetQueryPoolResults gets stuck
-                // due to VK_QUERY_RESULT_WAIT_BIT
-                let gpu_frame_time = (frame_stats.total_frame_count > 0)
-                    .then(|| {
-                        base_app
-                            .in_flight_frames
-                            .gpu_frame_time_ms()
-                            .expect("Failed to get gpu frame time")
-                    })
-                    .unwrap_or_default();
-
-                frame_stats = frame_stats.update(delta_time, gpu_frame_time);
             }
             // On resize
             Event::WindowEvent {
@@ -179,12 +168,10 @@ pub fn run<A: App + 'static>(
                     }
                 }
 
-                base_app.camera = base_app
-                    .camera
-                    .update(&controls, frame_stats.cpu_frame_time);
+                base_app.camera = base_app.camera.update(&controls, frame_stats.frame_time);
 
                 is_swapchain_dirty = base_app
-                    .draw(&window, app, &mut gui_context, &mut ui, &frame_stats)
+                    .draw(&window, app, &mut gui_context, &mut ui, &mut frame_stats)
                     .expect("Failed to tick");
             }
             // Keyboard
@@ -355,8 +342,34 @@ impl<B: App> BaseApp<B> {
         base_app: &mut B,
         gui_context: &mut GuiContext,
         gui: &mut B::Gui,
-        frame_stats: &FrameStats,
+        frame_stats: &mut FrameStats,
     ) -> Result<bool> {
+        // Drawing the frame
+        self.in_flight_frames.next();
+        self.in_flight_frames.fence().wait(None)?;
+
+        // Can't get for gpu time on the first frames or vkGetQueryPoolResults gets stuck
+        // due to VK_QUERY_RESULT_WAIT_BIT
+        let gpu_time = (frame_stats.total_frame_count >= IN_FLIGHT_FRAMES)
+            .then(|| self.in_flight_frames.gpu_frame_time_ms())
+            .transpose()?
+            .unwrap_or_default();
+        frame_stats.set_gpu_time_time(gpu_time);
+        frame_stats.tick();
+
+        let next_image_result = self.swapchain.acquire_next_image(
+            std::u64::MAX,
+            self.in_flight_frames.image_available_semaphore(),
+        );
+        let image_index = match next_image_result {
+            Ok(AcquiredImage { index, .. }) => index as usize,
+            Err(err) => match err.downcast_ref::<vk::Result>() {
+                Some(&vk::Result::ERROR_OUT_OF_DATE_KHR) => return Ok(true),
+                _ => panic!("Error while acquiring next image. Cause: {}", err),
+            },
+        };
+        self.in_flight_frames.fence().reset()?;
+
         // Generate UI
         gui_context
             .platform
@@ -374,43 +387,21 @@ impl<B: App> BaseApp<B> {
                     [self.swapchain.extent.width as f32 - 165.0, 5.0],
                     gui::imgui::Condition::Always,
                 )
-                .size([160.0, 100.0], gui::imgui::Condition::FirstUseEver)
+                .size([160.0, 140.0], gui::imgui::Condition::FirstUseEver)
                 .build(&ui, || {
-                    ui.text("\"R\" to toggle");
+                    ui.text("Framerate");
                     ui.label_text("fps", frame_stats.fps_counter.to_string());
-                    ui.label_text(
-                        "s(cpu)",
-                        frame_stats.cpu_frame_time.as_secs_f32().to_string(),
-                    );
-                    ui.label_text(
-                        "s(gpu)",
-                        frame_stats.gpu_frame_time.as_secs_f32().to_string(),
-                    );
+                    ui.text("Frametimes");
+                    ui.label_text("all", format!("{:?}", frame_stats.frame_time));
+                    ui.label_text("cpu", format!("{:?}", frame_stats.cpu_time));
+                    ui.label_text("gpu", format!("{:?}", frame_stats.gpu_time));
                 });
         }
 
         gui_context.platform.prepare_render(&ui, window);
         let draw_data = ui.render();
 
-        // Drawing the frame
-        self.in_flight_frames.next();
-        self.in_flight_frames.fence().wait(None)?;
-
-        let next_image_result = self.swapchain.acquire_next_image(
-            std::u64::MAX,
-            self.in_flight_frames.image_available_semaphore(),
-        );
-        let image_index = match next_image_result {
-            Ok(AcquiredImage { index, .. }) => index as usize,
-            Err(err) => match err.downcast_ref::<vk::Result>() {
-                Some(&vk::Result::ERROR_OUT_OF_DATE_KHR) => return Ok(true),
-                _ => panic!("Error while acquiring next image. Cause: {}", err),
-            },
-        };
-
-        base_app.update(self, gui, image_index, frame_stats.cpu_frame_time)?;
-
-        self.in_flight_frames.fence().reset()?;
+        base_app.update(self, gui, image_index, frame_stats.frame_time)?;
 
         let command_buffer = &self.command_buffers[image_index];
 
@@ -471,7 +462,7 @@ impl<B: App> BaseApp<B> {
         buffer.reset_all_timestamp_queries_from_pool(self.in_flight_frames.timing_query_pool());
 
         buffer.write_timestamp(
-            vk::PipelineStageFlags2::ALL_COMMANDS,
+            vk::PipelineStageFlags2::NONE,
             self.in_flight_frames.timing_query_pool(),
             0,
         );
@@ -697,34 +688,44 @@ impl InFlightFrames {
 
 #[derive(Debug, Clone, Copy, Default)]
 struct FrameStats {
-    cpu_frame_time: Duration,
-    gpu_frame_time: Duration,
+    // we collect gpu timings the frame after it was computed
+    // so we keep frame times for the two last frames
+    previous_frame_time: Duration,
+    frame_time: Duration,
+    cpu_time: Duration,
+    gpu_time: Duration,
     total_frame_count: u32,
     frame_count: u32,
     fps_counter: u32,
-    timer: f32,
+    timer: Duration,
 }
 
 impl FrameStats {
-    fn update(self, cpu_frame_time: Duration, gpu_frame_time: Duration) -> Self {
-        let total_frame_count = self.total_frame_count + 1;
-        let mut frame_count = self.frame_count + 1;
-        let mut fps_counter = self.fps_counter;
-        let mut timer = self.timer + cpu_frame_time.as_secs_f32();
+    const ONE_SEC: Duration = Duration::from_secs(1);
 
-        if timer > 1.0 {
-            fps_counter = frame_count;
-            frame_count = 0;
-            timer -= 1.0;
-        }
+    fn tick(&mut self) {
+        // compute cpu time
+        self.cpu_time = self.previous_frame_time.saturating_sub(self.gpu_time);
 
-        Self {
-            cpu_frame_time,
-            gpu_frame_time,
-            total_frame_count,
-            frame_count,
-            fps_counter,
-            timer,
+        // increment counter
+        self.total_frame_count += 1;
+        self.frame_count += 1;
+        self.timer += self.frame_time;
+
+        // reset counter if a sec has passed
+        if self.timer > FrameStats::ONE_SEC {
+            self.fps_counter = self.frame_count;
+            self.frame_count = 0;
+            self.timer -= FrameStats::ONE_SEC;
         }
+    }
+
+    fn set_frame_time(&mut self, frame_time: Duration) {
+        self.previous_frame_time = self.frame_time;
+        self.frame_time = frame_time;
+    }
+
+    fn set_gpu_time_time(&mut self, gpu_time: Duration) {
+        self.gpu_time = gpu_time;
     }
 }

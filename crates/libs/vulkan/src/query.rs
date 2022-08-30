@@ -8,23 +8,31 @@ use crate::{Context, Device};
 pub struct TimestampQueryPool<const C: usize> {
     device: Arc<Device>,
     pub(crate) inner: vk::QueryPool,
+    timestamp_period: f64,
 }
 
 impl<const C: usize> TimestampQueryPool<C> {
-    pub(crate) fn new(device: Arc<Device>) -> Result<Self> {
+    pub(crate) fn new(device: Arc<Device>, timestamp_period: f64) -> Result<Self> {
         let create_info = vk::QueryPoolCreateInfo::builder()
             .query_type(vk::QueryType::TIMESTAMP)
             .query_count(C as _);
 
         let inner = unsafe { device.inner.create_query_pool(&create_info, None)? };
 
-        Ok(Self { device, inner })
+        Ok(Self {
+            device,
+            inner,
+            timestamp_period,
+        })
     }
 }
 
 impl Context {
     pub fn create_timestamp_query_pool<const C: usize>(&self) -> Result<TimestampQueryPool<C>> {
-        TimestampQueryPool::new(self.device.clone())
+        TimestampQueryPool::new(
+            self.device.clone(),
+            self.physical_device.limits.timestamp_period as _,
+        )
     }
 }
 
@@ -56,6 +64,11 @@ impl<const C: usize> TimestampQueryPool<C> {
             )?;
         }
 
-        Ok(data)
+        let mut result = [0u64; C];
+        for (index, timestamp) in data.iter().enumerate() {
+            result[index] = (*timestamp as f64 * self.timestamp_period) as u64;
+        }
+
+        Ok(result)
     }
 }
