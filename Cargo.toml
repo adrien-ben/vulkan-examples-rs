@@ -5,6 +5,7 @@ members = [
     "crates/examples/rt_reflections",
     "crates/examples/triangle",
     "crates/examples/gpu_particles",
+    "crates/examples/mandelbrot",
     "crates/libs/app",
     "crates/libs/gltf",
     "crates/libs/gui",
