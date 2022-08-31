@@ -34,7 +34,7 @@ For examples with interactive camera you can move the camera with
 - Ctrl and space to go up or down
 - Right-click and move the mouse around to look
 
-Also you can toggle the stats window by pressing R.
+You can alse press R to cycle through the performance information.
 
 ## Requirements
 

@@ -62,8 +62,7 @@ impl Swapchain {
                     .get_physical_device_surface_present_modes(
                         context.physical_device.inner,
                         context.surface.surface_khr,
-                    )
-                    .expect("Failed to get physical device surface present modes")
+                    )?
             };
             if present_modes.contains(&vk::PresentModeKHR::IMMEDIATE) {
                 vk::PresentModeKHR::IMMEDIATE

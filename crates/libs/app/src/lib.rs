@@ -40,7 +40,7 @@ pub struct BaseApp<B: App> {
     in_flight_frames: InFlightFrames,
     pub context: Context,
     pub camera: Camera,
-    display_stats: bool,
+    stats_display_mode: StatsDisplayMode,
 }
 
 pub trait App: Sized {
@@ -99,6 +99,23 @@ impl Gui for () {
     }
 
     fn build(&mut self, _ui: &Ui) {}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StatsDisplayMode {
+    None,
+    Basic,
+    Full,
+}
+
+impl StatsDisplayMode {
+    fn next(self) -> Self {
+        match self {
+            Self::None => Self::Basic,
+            Self::Basic => Self::Full,
+            Self::Full => Self::None,
+        }
+    }
 }
 
 pub fn run<A: App + 'static>(
@@ -304,7 +321,7 @@ impl<B: App> BaseApp<B> {
             command_buffers,
             in_flight_frames,
             camera,
-            display_stats: true,
+            stats_display_mode: StatsDisplayMode::Basic,
         })
     }
 
@@ -377,26 +394,7 @@ impl<B: App> BaseApp<B> {
         let ui = gui_context.imgui.frame();
 
         gui.build(&ui);
-
-        if self.display_stats {
-            gui::imgui::Window::new("Frame stats")
-                .focus_on_appearing(false)
-                .no_decoration()
-                .bg_alpha(0.5)
-                .position(
-                    [self.swapchain.extent.width as f32 - 165.0, 5.0],
-                    gui::imgui::Condition::Always,
-                )
-                .size([160.0, 140.0], gui::imgui::Condition::FirstUseEver)
-                .build(&ui, || {
-                    ui.text("Framerate");
-                    ui.label_text("fps", frame_stats.fps_counter.to_string());
-                    ui.text("Frametimes");
-                    ui.label_text("all", format!("{:?}", frame_stats.frame_time));
-                    ui.label_text("cpu", format!("{:?}", frame_stats.cpu_time));
-                    ui.label_text("gpu", format!("{:?}", frame_stats.gpu_time));
-                });
-        }
+        self.build_perf_ui(&ui, frame_stats);
 
         gui_context.platform.prepare_render(&ui, window);
         let draw_data = ui.render();
@@ -442,6 +440,61 @@ impl<B: App> BaseApp<B> {
         }
 
         Ok(false)
+    }
+
+    fn build_perf_ui(&self, ui: &Ui, frame_stats: &mut FrameStats) {
+        let width = self.swapchain.extent.width as f32;
+        let height = self.swapchain.extent.height as f32;
+
+        if matches!(
+            self.stats_display_mode,
+            StatsDisplayMode::Basic | StatsDisplayMode::Full
+        ) {
+            gui::imgui::Window::new("Frame stats")
+                .focus_on_appearing(false)
+                .no_decoration()
+                .bg_alpha(0.5)
+                .position([width - 165.0, 5.0], gui::imgui::Condition::Always)
+                .size([160.0, 140.0], gui::imgui::Condition::FirstUseEver)
+                .build(ui, || {
+                    ui.text("Framerate");
+                    ui.label_text("fps", frame_stats.fps_counter.to_string());
+                    ui.text("Frametimes");
+                    ui.label_text("all", format!("{:?}", frame_stats.frame_time));
+                    ui.label_text("cpu", format!("{:?}", frame_stats.cpu_time));
+                    ui.label_text("gpu", format!("{:?}", frame_stats.gpu_time));
+                });
+        }
+
+        if matches!(self.stats_display_mode, StatsDisplayMode::Full) {
+            let graph_size = [width - 80.0, 40.0];
+            const SCALE_MIN: f32 = 0.0;
+            const SCALE_MAX: f32 = 17.0;
+
+            gui::imgui::Window::new("Frametime graphs")
+                .focus_on_appearing(false)
+                .no_decoration()
+                .bg_alpha(0.5)
+                .position([5.0, height - 145.0], gui::imgui::Condition::Always)
+                .size([width - 10.0, 140.0], gui::imgui::Condition::Always)
+                .build(ui, || {
+                    ui.plot_lines("Frame", &frame_stats.frame_time_ms_log.0)
+                        .scale_min(SCALE_MIN)
+                        .scale_max(SCALE_MAX)
+                        .graph_size(graph_size)
+                        .build();
+                    ui.plot_lines("CPU", &frame_stats.cpu_time_ms_log.0)
+                        .scale_min(SCALE_MIN)
+                        .scale_max(SCALE_MAX)
+                        .graph_size(graph_size)
+                        .build();
+                    ui.plot_lines("GPU", &frame_stats.gpu_time_ms_log.0)
+                        .scale_min(SCALE_MIN)
+                        .scale_max(SCALE_MAX)
+                        .graph_size(graph_size)
+                        .build();
+                });
+        }
     }
 
     fn record_command_buffer(
@@ -571,7 +624,7 @@ impl<B: App> BaseApp<B> {
     }
 
     fn toggle_stats(&mut self) {
-        self.display_stats = !self.display_stats;
+        self.stats_display_mode = self.stats_display_mode.next();
     }
 }
 
@@ -686,7 +739,7 @@ impl InFlightFrames {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug)]
 struct FrameStats {
     // we collect gpu timings the frame after it was computed
     // so we keep frame times for the two last frames
@@ -694,18 +747,46 @@ struct FrameStats {
     frame_time: Duration,
     cpu_time: Duration,
     gpu_time: Duration,
+    frame_time_ms_log: Queue<f32>,
+    cpu_time_ms_log: Queue<f32>,
+    gpu_time_ms_log: Queue<f32>,
     total_frame_count: u32,
     frame_count: u32,
     fps_counter: u32,
     timer: Duration,
 }
 
+impl Default for FrameStats {
+    fn default() -> Self {
+        Self {
+            previous_frame_time: Default::default(),
+            frame_time: Default::default(),
+            cpu_time: Default::default(),
+            gpu_time: Default::default(),
+            frame_time_ms_log: Queue::new(FrameStats::MAX_LOG_SIZE),
+            cpu_time_ms_log: Queue::new(FrameStats::MAX_LOG_SIZE),
+            gpu_time_ms_log: Queue::new(FrameStats::MAX_LOG_SIZE),
+            total_frame_count: Default::default(),
+            frame_count: Default::default(),
+            fps_counter: Default::default(),
+            timer: Default::default(),
+        }
+    }
+}
+
 impl FrameStats {
     const ONE_SEC: Duration = Duration::from_secs(1);
+    const MAX_LOG_SIZE: usize = 1000;
 
     fn tick(&mut self) {
         // compute cpu time
         self.cpu_time = self.previous_frame_time.saturating_sub(self.gpu_time);
+
+        // push log
+        self.frame_time_ms_log
+            .push(self.previous_frame_time.as_millis() as _);
+        self.cpu_time_ms_log.push(self.cpu_time.as_millis() as _);
+        self.gpu_time_ms_log.push(self.gpu_time.as_millis() as _);
 
         // increment counter
         self.total_frame_count += 1;
@@ -727,5 +808,21 @@ impl FrameStats {
 
     fn set_gpu_time_time(&mut self, gpu_time: Duration) {
         self.gpu_time = gpu_time;
+    }
+}
+
+#[derive(Debug)]
+struct Queue<T>(Vec<T>, usize);
+
+impl<T> Queue<T> {
+    fn new(max_size: usize) -> Self {
+        Self(Vec::with_capacity(max_size), max_size)
+    }
+
+    fn push(&mut self, value: T) {
+        if self.0.len() == self.1 {
+            self.0.remove(0);
+        }
+        self.0.push(value);
     }
 }
