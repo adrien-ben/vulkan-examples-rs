@@ -97,7 +97,7 @@ impl Swapchain {
         log::debug!("Swapchain extent: {extent:?}");
 
         // Swapchain image count
-        let image_count = capabilities.min_image_count;
+        let image_count = capabilities.min_image_count + 1;
         log::debug!("Swapchain image count: {image_count:?}");
 
         // Swapchain
