@@ -39,6 +39,8 @@ You can alse press R to cycle through the performance information.
 
 ## Requirements
 
+- Rust 1.64
+
 All examples use Vulkan 1.3 and the following features:
 
 - dynamic_rendering

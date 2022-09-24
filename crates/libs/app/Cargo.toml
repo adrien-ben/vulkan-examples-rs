@@ -1,16 +1,17 @@
 [package]
 name = "app"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-log = "0.4"
-simple_logger = "2.1"
-anyhow = "1.0"
-winit = "0.26"
-glam = "0.21"
+log.workspace = true
+simple_logger.workspace = true
+anyhow.workspace = true
+winit.workspace = true
+glam.workspace = true
 
 vulkan = { path = "../vulkan" }
 gui = { path = "../gui" }

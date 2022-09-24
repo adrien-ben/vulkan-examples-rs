@@ -1,16 +1,17 @@
 [package]
 name = "gui"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-log = "0.4"
-anyhow = "1.0"
-winit = "0.26"
-imgui = "0.8"
-imgui-winit-support = { version = "^0.8", default-features = false, features = ["winit-26"] }
-imgui-rs-vulkan-renderer = { version = "1.4", features = ["gpu-allocator", "dynamic-rendering"] }
+log.workspace = true
+anyhow.workspace = true
+winit.workspace = true
+imgui.workspace = true
+imgui-winit-support.workspace = true
+imgui-rs-vulkan-renderer.workspace = true
 
 vulkan = { path = "../vulkan" }

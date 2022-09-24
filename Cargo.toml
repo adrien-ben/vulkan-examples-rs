@@ -6,8 +6,33 @@ members = [
     "crates/examples/triangle",
     "crates/examples/gpu_particles",
     "crates/examples/mandelbrot",
-    "crates/libs/app",
-    "crates/libs/gltf",
-    "crates/libs/gui",
-    "crates/libs/vulkan",
+    "crates/libs/*",
 ]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Adrien Bennadji <adrien.bennadji@live.fr>"]
+
+[workspace.dependencies]
+log = "0.4"
+simple_logger = "2.1"
+thiserror = "1.0"
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+ron = "0.8"
+num_cpus = "1.13"
+rand = "0.8"
+
+gltf = "1.0"
+glam = { version = "0.21", features = ["serde"] }
+
+winit = "0.26"
+ash = { version = "0.37", features = ["linked"] }
+ash-window = "0.11"
+raw-window-handle = "0.4"
+gpu-allocator = { version = "0.19", default-features = false, features = ["vulkan"] }
+
+imgui = "0.8"
+imgui-winit-support = { version = "^0.8", default-features = false, features = ["winit-26"] }
+imgui-rs-vulkan-renderer = { git = "https://github.com/adrien-ben/imgui-rs-vulkan-renderer", features = ["gpu-allocator", "dynamic-rendering"] }
