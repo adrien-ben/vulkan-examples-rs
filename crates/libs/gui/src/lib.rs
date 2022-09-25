@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use imgui::{Context, DrawData, FontConfig, FontSource};
-use imgui_rs_vulkan_renderer::{Options, Renderer};
+use imgui_rs_vulkan_renderer::{DynamicRendering, Options, Renderer};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use vulkan::{ash::vk, CommandBuffer, CommandPool, Context as VkContext};
 use winit::{event::Event, window::Window};
@@ -56,7 +56,10 @@ impl GuiContext {
             context.device.inner.clone(),
             context.graphics_queue.inner,
             command_pool.inner,
-            format,
+            DynamicRendering {
+                color_attachment_format: format,
+                depth_attachment_format: None,
+            },
             &mut imgui,
             Some(Options {
                 in_flight_frames,

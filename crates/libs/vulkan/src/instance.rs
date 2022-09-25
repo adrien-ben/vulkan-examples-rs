@@ -40,8 +40,7 @@ impl Instance {
         let create_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
             .flags(vk::DebugUtilsMessengerCreateFlagsEXT::empty())
             .message_severity(
-                vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE
-                    | vk::DebugUtilsMessageSeverityFlagsEXT::INFO
+                vk::DebugUtilsMessageSeverityFlagsEXT::INFO
                     | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING
                     | vk::DebugUtilsMessageSeverityFlagsEXT::ERROR,
             )
