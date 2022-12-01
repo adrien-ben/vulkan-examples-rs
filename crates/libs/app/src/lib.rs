@@ -261,7 +261,7 @@ impl<B: App> BaseApp<B> {
             required_extensions.push("VK_KHR_deferred_host_operations");
         }
 
-        let mut context = ContextBuilder::new(window)
+        let mut context = ContextBuilder::new(window, window)
             .vulkan_version(VERSION_1_3)
             .app_name(app_name)
             .required_extensions(&required_extensions)
@@ -397,7 +397,7 @@ impl<B: App> BaseApp<B> {
         self.build_perf_ui(&ui, frame_stats);
 
         gui_context.platform.prepare_render(&ui, window);
-        let draw_data = ui.render();
+        let draw_data = gui_context.imgui.render();
 
         base_app.update(self, gui, image_index, frame_stats.frame_time)?;
 
@@ -450,13 +450,13 @@ impl<B: App> BaseApp<B> {
             self.stats_display_mode,
             StatsDisplayMode::Basic | StatsDisplayMode::Full
         ) {
-            gui::imgui::Window::new("Frame stats")
+            ui.window("Frame stats")
                 .focus_on_appearing(false)
                 .no_decoration()
                 .bg_alpha(0.5)
                 .position([width - 165.0, 5.0], gui::imgui::Condition::Always)
                 .size([160.0, 140.0], gui::imgui::Condition::FirstUseEver)
-                .build(ui, || {
+                .build(|| {
                     ui.text("Framerate");
                     ui.label_text("fps", frame_stats.fps_counter.to_string());
                     ui.text("Frametimes");
@@ -471,13 +471,13 @@ impl<B: App> BaseApp<B> {
             const SCALE_MIN: f32 = 0.0;
             const SCALE_MAX: f32 = 17.0;
 
-            gui::imgui::Window::new("Frametime graphs")
+            ui.window("Frametime graphs")
                 .focus_on_appearing(false)
                 .no_decoration()
                 .bg_alpha(0.5)
                 .position([5.0, height - 145.0], gui::imgui::Condition::Always)
                 .size([width - 10.0, 140.0], gui::imgui::Condition::Always)
-                .build(ui, || {
+                .build(|| {
                     ui.plot_lines("Frame", &frame_stats.frame_time_ms_log.0)
                         .scale_min(SCALE_MIN)
                         .scale_max(SCALE_MAX)

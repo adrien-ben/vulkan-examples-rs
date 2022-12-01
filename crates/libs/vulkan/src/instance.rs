@@ -2,7 +2,7 @@ use std::ffi::{c_void, CStr, CString};
 
 use anyhow::Result;
 use ash::{extensions::ext::DebugUtils, vk, Entry, Instance as AshInstance};
-use raw_window_handle::HasRawWindowHandle;
+use raw_window_handle::HasRawDisplayHandle;
 
 use crate::{physical_device::PhysicalDevice, surface::Surface, Version};
 
@@ -16,7 +16,7 @@ pub struct Instance {
 impl Instance {
     pub(crate) fn new(
         entry: &Entry,
-        window: &dyn HasRawWindowHandle,
+        display_handle: &dyn HasRawDisplayHandle,
         api_version: Version,
         app_name: &str,
     ) -> Result<Self> {
@@ -27,7 +27,9 @@ impl Instance {
             .application_name(app_name.as_c_str())
             .api_version(api_version.make_api_version());
 
-        let mut extension_names = ash_window::enumerate_required_extensions(&window)?.to_vec();
+        let mut extension_names =
+            ash_window::enumerate_required_extensions(display_handle.raw_display_handle())?
+                .to_vec();
         extension_names.push(DebugUtils::name().as_ptr());
 
         let instance_create_info = vk::InstanceCreateInfo::builder()

@@ -16,7 +16,7 @@ authors = ["Adrien Bennadji <adrien.bennadji@live.fr>"]
 
 [workspace.dependencies]
 log = "0.4"
-simple_logger = "2.1"
+simple_logger = "4.0"
 thiserror = "1.0"
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
@@ -25,14 +25,14 @@ num_cpus = "1.13"
 rand = "0.8"
 
 gltf = "1.0"
-glam = { version = "0.21", features = ["serde"] }
+glam = { version = "0.22", features = ["serde"] }
 
-winit = "0.26"
+winit = "0.27"
 ash = { version = "0.37", features = ["linked"] }
-ash-window = "0.11"
-raw-window-handle = "0.4"
-gpu-allocator = { version = "0.19", default-features = false, features = ["vulkan"] }
+ash-window = "0.12"
+raw-window-handle = "0.5"
+gpu-allocator = { version = "0.21", default-features = false, features = ["vulkan"] }
 
-imgui = "0.8"
-imgui-winit-support = { version = "^0.8", default-features = false, features = ["winit-26"] }
-imgui-rs-vulkan-renderer = { version = "1.5", features = ["gpu-allocator", "dynamic-rendering"] }
+imgui = "0.9"
+imgui-winit-support = "0.9"
+imgui-rs-vulkan-renderer = { version = "1.6", features = ["gpu-allocator", "dynamic-rendering"] }

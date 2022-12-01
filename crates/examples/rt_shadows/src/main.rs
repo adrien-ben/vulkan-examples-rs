@@ -6,7 +6,7 @@ use app::vulkan::utils::*;
 use app::{vulkan::*, BaseApp};
 use app::{App, ImageAndView};
 use gltf::Vertex;
-use gui::imgui::{ColorPicker, Condition, Ui, Window};
+use gui::imgui::{Condition, Ui};
 use std::mem::{size_of, size_of_val};
 use std::time::Duration;
 
@@ -177,18 +177,18 @@ impl app::Gui for Gui {
     }
 
     fn build(&mut self, ui: &Ui) {
-        Window::new("Vulkan RT")
+        ui.window("Vulkan RT")
             .size([300.0, 350.0], Condition::FirstUseEver)
-            .build(ui, || {
+            .build(|| {
                 ui.text_wrapped("Light");
                 ui.separator();
 
                 ui.input_float3("direction", &mut self.light.direction)
                     .build();
 
-                ColorPicker::new("color", &mut self.light.color)
+                ui.color_picker3_config("color", &mut self.light.color)
                     .display_rgb(true)
-                    .build(ui);
+                    .build();
             });
     }
 }

@@ -6,7 +6,7 @@ use gpu_allocator::{
     vulkan::{Allocator, AllocatorCreateDesc},
     AllocatorDebugSettings,
 };
-use raw_window_handle::HasRawWindowHandle;
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 use crate::{
     device::{Device, DeviceFeatures},
@@ -33,7 +33,8 @@ pub struct Context {
 }
 
 pub struct ContextBuilder<'a> {
-    window: &'a dyn HasRawWindowHandle,
+    window_handle: &'a dyn HasRawWindowHandle,
+    display_handle: &'a dyn HasRawDisplayHandle,
     vulkan_version: Version,
     app_name: &'a str,
     required_extensions: &'a [&'a str],
@@ -42,9 +43,13 @@ pub struct ContextBuilder<'a> {
 }
 
 impl<'a> ContextBuilder<'a> {
-    pub fn new(window: &'a dyn HasRawWindowHandle) -> Self {
+    pub fn new(
+        window_handle: &'a dyn HasRawWindowHandle,
+        display_handle: &'a dyn HasRawDisplayHandle,
+    ) -> Self {
         Self {
-            window,
+            window_handle,
+            display_handle,
             vulkan_version: VERSION_1_0,
             app_name: "",
             required_extensions: &[],
@@ -93,7 +98,8 @@ impl<'a> ContextBuilder<'a> {
 impl Context {
     fn new(
         ContextBuilder {
-            window,
+            window_handle,
+            display_handle,
             vulkan_version,
             app_name,
             required_extensions,
@@ -103,10 +109,10 @@ impl Context {
     ) -> Result<Self> {
         // Vulkan instance
         let entry = Entry::linked();
-        let mut instance = Instance::new(&entry, window, vulkan_version, app_name)?;
+        let mut instance = Instance::new(&entry, display_handle, vulkan_version, app_name)?;
 
         // Vulkan surface
-        let surface = Surface::new(&entry, &instance, &window)?;
+        let surface = Surface::new(&entry, &instance, window_handle, display_handle)?;
 
         let physical_devices = instance.enumerate_physical_devices(&surface)?;
         let (physical_device, graphics_queue_family, present_queue_family) =

@@ -13,7 +13,7 @@ use app::vulkan::{
     WriteDescriptorSet, WriteDescriptorSetKind,
 };
 use app::{log, App, BaseApp};
-use gui::imgui::{ColorEdit, Condition, Slider, Ui, Window};
+use gui::imgui::{Condition, Ui};
 use rand::Rng;
 
 const WIDTH: u32 = 1024;
@@ -295,32 +295,36 @@ impl app::Gui for Gui {
     }
 
     fn build(&mut self, ui: &Ui) {
-        Window::new("Particles")
+        ui.window("Particles")
             .position([5.0, 5.0], Condition::FirstUseEver)
             .size([300.0, 250.0], Condition::FirstUseEver)
             .resizable(false)
             .movable(false)
-            .build(ui, || {
+            .build(|| {
                 ui.text("Particles");
-                Slider::new("Count", 0, MAX_PARTICLE_COUNT).build(ui, &mut self.particle_count);
-                Slider::new("Size", MIN_PARTICLE_SIZE, MAX_PARTICLE_SIZE)
+                ui.slider("Count", 0, MAX_PARTICLE_COUNT, &mut self.particle_count);
+                ui.slider_config("Size", MIN_PARTICLE_SIZE, MAX_PARTICLE_SIZE)
                     .display_format("%.1f")
-                    .build(ui, &mut self.particle_size);
-                ColorEdit::new("Color 1", &mut self.color1)
+                    .build(&mut self.particle_size);
+                ui.color_edit4_config("Color 1", &mut self.color1)
                     .alpha(false)
                     .tooltip(false)
-                    .build(ui);
-                ColorEdit::new("Color 2", &mut self.color2)
+                    .build();
+                ui.color_edit4_config("Color 2", &mut self.color2)
                     .alpha(false)
                     .tooltip(false)
-                    .build(ui);
-                ColorEdit::new("Color 3", &mut self.color3)
+                    .build();
+                ui.color_edit4_config("Color 3", &mut self.color3)
                     .alpha(false)
                     .tooltip(false)
-                    .build(ui);
+                    .build();
                 ui.text("Attractor");
-                Slider::new("Strength", MIN_ATTRACTOR_STRENGTH, MAX_ATTRACTOR_STRENGTH)
-                    .build(ui, &mut self.attractor_strength);
+                ui.slider(
+                    "Strength",
+                    MIN_ATTRACTOR_STRENGTH,
+                    MAX_ATTRACTOR_STRENGTH,
+                    &mut self.attractor_strength,
+                );
                 ui.input_float3("Position", &mut self.attractor_position)
                     .build();
                 if ui.button("Apply") {
