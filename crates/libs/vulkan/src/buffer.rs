@@ -6,7 +6,7 @@ use std::{
 use anyhow::Result;
 use ash::vk;
 use gpu_allocator::{
-    vulkan::{Allocation, AllocationCreateDesc, Allocator},
+    vulkan::{Allocation, AllocationCreateDesc, AllocationScheme, Allocator},
     MemoryLocation,
 };
 
@@ -36,6 +36,7 @@ impl Buffer {
             requirements,
             location: memory_location,
             linear: true,
+            allocation_scheme: AllocationScheme::GpuAllocatorManaged,
         })?;
 
         unsafe {

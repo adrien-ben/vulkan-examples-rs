@@ -8,6 +8,7 @@ members = [
     "crates/examples/mandelbrot",
     "crates/libs/*",
 ]
+resolver = "2"
 
 [workspace.package]
 version = "0.1.0"
@@ -25,14 +26,14 @@ num_cpus = "1.13"
 rand = "0.8"
 
 gltf = "1.0"
-glam = { version = "0.22", features = ["serde"] }
+glam = { version = "0.25", features = ["serde"] }
 
 winit = "0.27"
 ash = { version = "0.37", features = ["linked"] }
 ash-window = "0.12"
 raw-window-handle = "0.5"
-gpu-allocator = { version = "0.21", default-features = false, features = ["vulkan"] }
+gpu-allocator = { version = "0.25", default-features = false, features = ["vulkan"] }
 
-imgui = "0.9"
-imgui-winit-support = "0.9"
-imgui-rs-vulkan-renderer = { version = "1.6", features = ["gpu-allocator", "dynamic-rendering"] }
+imgui = "0.11"
+imgui-winit-support = "0.11"
+imgui-rs-vulkan-renderer = { version = "1.12", features = ["gpu-allocator", "dynamic-rendering"] }
