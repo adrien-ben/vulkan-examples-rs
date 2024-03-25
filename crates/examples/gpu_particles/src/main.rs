@@ -7,10 +7,9 @@ use app::vulkan::ash::vk;
 use app::vulkan::gpu_allocator::MemoryLocation;
 use app::vulkan::utils::create_gpu_only_buffer_from_data;
 use app::vulkan::{
-    Buffer, BufferBarrier, CommandBuffer, ComputePipeline, ComputePipelineCreateInfo, Context,
-    DescriptorPool, DescriptorSet, DescriptorSetLayout, GraphicsPipeline,
-    GraphicsPipelineCreateInfo, GraphicsShaderCreateInfo, PipelineLayout, Vertex,
-    WriteDescriptorSet, WriteDescriptorSetKind,
+    Buffer, BufferBarrier, ComputePipeline, ComputePipelineCreateInfo, Context, DescriptorPool,
+    DescriptorSet, DescriptorSetLayout, GraphicsPipeline, GraphicsPipelineCreateInfo,
+    GraphicsShaderCreateInfo, PipelineLayout, Vertex, WriteDescriptorSet, WriteDescriptorSetKind,
 };
 use app::{log, App, BaseApp};
 use gui::egui::{self, Widget};
@@ -28,7 +27,7 @@ const MIN_ATTRACTOR_STRENGTH: u32 = 0;
 const MAX_ATTRACTOR_STRENGTH: u32 = 100;
 
 fn main() -> Result<()> {
-    app::run::<Particles>(APP_NAME, WIDTH, HEIGHT, false)
+    app::run::<Particles>(APP_NAME, WIDTH, HEIGHT, Default::default())
 }
 struct Particles {
     particle_count: u32,
@@ -183,7 +182,7 @@ impl App for Particles {
 
     fn update(
         &mut self,
-        base: &BaseApp<Self>,
+        base: &mut BaseApp<Self>,
         gui: &mut <Self as App>::Gui,
         _: usize,
         delta_time: Duration,
@@ -218,12 +217,9 @@ impl App for Particles {
         Ok(())
     }
 
-    fn record_raster_commands(
-        &self,
-        base: &BaseApp<Self>,
-        buffer: &CommandBuffer,
-        image_index: usize,
-    ) -> Result<()> {
+    fn record_raster_commands(&self, base: &BaseApp<Self>, image_index: usize) -> Result<()> {
+        let buffer = &base.command_buffers[image_index];
+
         buffer.bind_compute_pipeline(&self.compute_pipeline);
         buffer.bind_descriptor_sets(
             vk::PipelineBindPoint::COMPUTE,
@@ -281,7 +277,7 @@ struct Gui {
 }
 
 impl app::Gui for Gui {
-    fn new() -> Result<Self> {
+    fn new<A: App>(_: &BaseApp<A>) -> Result<Self> {
         Ok(Gui {
             particle_count: MAX_PARTICLE_COUNT / 20,
             particle_size: MIN_PARTICLE_SIZE,

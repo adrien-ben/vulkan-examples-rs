@@ -125,6 +125,15 @@ impl Image {
     }
 }
 
+impl Image {
+    pub fn extent2d(&self) -> vk::Extent2D {
+        vk::Extent2D {
+            width: self.extent.width,
+            height: self.extent.height,
+        }
+    }
+}
+
 impl Context {
     pub fn create_image(
         &self,

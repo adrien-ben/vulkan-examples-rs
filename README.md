@@ -14,6 +14,7 @@ You can run one of the following example.
 - triangle: Rasterized triangle.
 - gpu_particles: Particles simulated on the gpu using a compute shader.
 - mandelbrot: Render mandelbrot set on gpu with expensive setting. The goal is to be gpu bound with a simple setup for some tests.
+- [hdr_skybox](crates/examples/hdr_skybox/): Display a skybox from a environment HDRi image targetting an HDR surface.
 
 ```ps1
 # Powershell example (all scripts have a .sh version)
@@ -39,7 +40,7 @@ You can alse press R to cycle through the performance information.
 
 ## Requirements
 
-- Rust 1.64
+- Rust 1.77
 
 All examples use Vulkan 1.3 and the following features:
 

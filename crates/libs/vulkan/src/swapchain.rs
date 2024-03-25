@@ -29,27 +29,21 @@ impl Swapchain {
         let device = context.device.clone();
 
         // Swapchain format
-        let format = {
-            let formats = unsafe {
-                context.surface.inner.get_physical_device_surface_formats(
-                    context.physical_device.inner,
-                    context.surface.surface_khr,
-                )?
-            };
-            if formats.len() == 1 && formats[0].format == vk::Format::UNDEFINED {
-                vk::SurfaceFormatKHR {
-                    format: vk::Format::B8G8R8A8_UNORM,
-                    color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
-                }
-            } else {
-                *formats
-                    .iter()
-                    .find(|format| {
-                        format.format == vk::Format::B8G8R8A8_UNORM
-                            && format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR
-                    })
-                    .unwrap_or(&formats[0])
+        let formats = &context.supported_surface_formats;
+
+        let format = if formats.len() == 1 && formats[0].format == vk::Format::UNDEFINED {
+            vk::SurfaceFormatKHR {
+                format: vk::Format::B8G8R8A8_UNORM,
+                color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
             }
+        } else {
+            *formats
+                .iter()
+                .find(|format| {
+                    format.format == vk::Format::B8G8R8A8_UNORM
+                        && format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR
+                })
+                .unwrap_or(&formats[0])
         };
         log::debug!("Swapchain format: {format:?}");
 
@@ -169,10 +163,25 @@ impl Swapchain {
         })
     }
 
-    pub fn resize(&mut self, context: &Context, width: u32, height: u32) -> Result<()> {
+    pub fn update(
+        &mut self,
+        context: &Context,
+        width: u32,
+        height: u32,
+        format: Option<vk::SurfaceFormatKHR>,
+    ) -> Result<()> {
         log::debug!("Resizing vulkan swapchain to {width}x{height}");
 
         self.destroy();
+
+        if let Some(format) = format {
+            if context.supported_surface_formats.contains(&format) {
+                self.format = format.format;
+                self.color_space = format.color_space;
+            } else {
+                log::warn!("Swapchain format {format:?} is not supported. Keeping current format.");
+            }
+        }
 
         let capabilities = unsafe {
             context

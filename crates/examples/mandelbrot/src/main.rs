@@ -5,8 +5,8 @@ use app::anyhow::Result;
 use app::vulkan::ash::vk;
 use app::vulkan::utils::create_gpu_only_buffer_from_data;
 use app::vulkan::{
-    Buffer, CommandBuffer, Context, GraphicsPipeline, GraphicsPipelineCreateInfo,
-    GraphicsShaderCreateInfo, PipelineLayout,
+    Buffer, Context, GraphicsPipeline, GraphicsPipelineCreateInfo, GraphicsShaderCreateInfo,
+    PipelineLayout,
 };
 use app::{App, BaseApp};
 
@@ -15,7 +15,7 @@ const HEIGHT: u32 = 576;
 const APP_NAME: &str = "Mandelbrot";
 
 fn main() -> Result<()> {
-    app::run::<Mandelbrot>(APP_NAME, WIDTH, HEIGHT, false)
+    app::run::<Mandelbrot>(APP_NAME, WIDTH, HEIGHT, Default::default())
 }
 struct Mandelbrot {
     vertex_buffer: Buffer,
@@ -48,7 +48,7 @@ impl App for Mandelbrot {
 
     fn update(
         &mut self,
-        _: &BaseApp<Self>,
+        _: &mut BaseApp<Self>,
         _: &mut <Self as App>::Gui,
         _: usize,
         _: Duration,
@@ -56,12 +56,9 @@ impl App for Mandelbrot {
         Ok(())
     }
 
-    fn record_raster_commands(
-        &self,
-        base: &BaseApp<Self>,
-        buffer: &CommandBuffer,
-        image_index: usize,
-    ) -> Result<()> {
+    fn record_raster_commands(&self, base: &BaseApp<Self>, image_index: usize) -> Result<()> {
+        let buffer = &base.command_buffers[image_index];
+
         buffer.begin_rendering(
             &base.swapchain.views[image_index],
             base.swapchain.extent,

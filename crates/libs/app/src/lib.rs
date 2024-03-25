@@ -12,7 +12,6 @@ use glam::vec3;
 use gpu_allocator::MemoryLocation;
 use gui::{
     egui::{self, Align2, ClippedPrimitive, FullOutput, TextureId},
-    egui_ash_renderer::Renderer,
     GuiContext,
 };
 use simple_logger::SimpleLogger;
@@ -37,11 +36,25 @@ pub struct BaseApp<B: App> {
     pub swapchain: Swapchain,
     pub command_pool: CommandPool,
     pub storage_images: Vec<ImageAndView>,
-    command_buffers: Vec<CommandBuffer>,
+    pub command_buffers: Vec<CommandBuffer>,
     in_flight_frames: InFlightFrames,
-    pub context: Context,
     pub camera: Camera,
     stats_display_mode: StatsDisplayMode,
+
+    pub gui_context: GuiContext,
+    skip_drawing_ui: bool,
+
+    pub context: Context, // make sure it's dropped last
+
+    requested_swapchain_format: Option<vk::SurfaceFormatKHR>,
+}
+
+#[derive(Debug, Default)]
+pub struct AppConfig<'a, 'b> {
+    pub enable_raytracing: bool,
+    pub required_instance_extensions: &'a [&'b str],
+    pub ui_framebuffer_format: Option<vk::Format>,
+    pub skip_drawing_ui: bool,
 }
 
 pub trait App: Sized {
@@ -51,7 +64,7 @@ pub trait App: Sized {
 
     fn update(
         &mut self,
-        base: &BaseApp<Self>,
+        base: &mut BaseApp<Self>,
         gui: &mut Self::Gui,
         image_index: usize,
         delta_time: Duration,
@@ -71,16 +84,29 @@ pub trait App: Sized {
         Ok(())
     }
 
-    fn record_raster_commands(
+    fn record_raster_commands(&self, base: &BaseApp<Self>, image_index: usize) -> Result<()> {
+        // prevents reports of unused parameters without needing to use #[allow]
+        let _ = base;
+        let _ = image_index;
+
+        Ok(())
+    }
+
+    /// Same as [`App::record_raster_commands`] but with ui related data
+    ///
+    /// Useful if the user wants to bypass the default ui rendering (see [`AppConfig::skip_drawing_ui`])
+    fn record_raster_commands_with_ui(
         &self,
-        base: &BaseApp<Self>,
-        buffer: &CommandBuffer,
+        base: &mut BaseApp<Self>,
         image_index: usize,
+        ui_pixels_per_point: f32,
+        ui_primitives: &[ClippedPrimitive],
     ) -> Result<()> {
         // prevents reports of unused parameters without needing to use #[allow]
         let _ = base;
-        let _ = buffer;
         let _ = image_index;
+        let _ = ui_pixels_per_point;
+        let _ = ui_primitives;
 
         Ok(())
     }
@@ -89,13 +115,16 @@ pub trait App: Sized {
 }
 
 pub trait Gui: Sized {
-    fn new() -> Result<Self>;
+    fn new<A: App>(base: &BaseApp<A>) -> Result<Self>;
 
     fn build(&mut self, ui: &egui::Context);
 }
 
 impl Gui for () {
-    fn new() -> Result<Self> {
+    fn new<A: App>(base: &BaseApp<A>) -> Result<Self> {
+        // prevents reports of unused parameters without needing to use #[allow]
+        let _ = base;
+
         Ok(())
     }
 
@@ -123,20 +152,14 @@ pub fn run<A: App + 'static>(
     app_name: &str,
     width: u32,
     height: u32,
-    enable_raytracing: bool,
+    app_config: AppConfig,
 ) -> Result<()> {
     SimpleLogger::default().env().init()?;
 
     let (window, event_loop) = create_window(app_name, width, height)?;
-    let mut base_app = BaseApp::new(&window, app_name, enable_raytracing)?;
-    let mut ui = A::Gui::new()?;
+    let mut base_app = BaseApp::new(&window, app_name, app_config)?;
+    let mut ui = A::Gui::new(&base_app)?;
     let mut app = A::new(&mut base_app)?;
-    let mut gui_context = GuiContext::new(
-        &base_app.context,
-        base_app.swapchain.format,
-        &window,
-        IN_FLIGHT_FRAMES as _,
-    )?;
 
     let mut controls = Controls::default();
     let mut is_swapchain_dirty = false;
@@ -159,7 +182,7 @@ pub fn run<A: App + 'static>(
                 controls = controls.reset();
             }
             Event::WindowEvent { event, .. } => {
-                gui_context.handle_event(&window, &event);
+                base_app.gui_context.handle_event(&window, &event);
 
                 match event {
                     // On resize
@@ -201,11 +224,13 @@ pub fn run<A: App + 'static>(
 
             // Draw
             Event::AboutToWait => {
-                if is_swapchain_dirty {
+                if is_swapchain_dirty || base_app.requested_swapchain_format.is_some() {
                     let dim = window.inner_size();
+                    let format = base_app.requested_swapchain_format.take();
+
                     if dim.width > 0 && dim.height > 0 {
                         base_app
-                            .recreate_swapchain(dim.width, dim.height)
+                            .recreate_swapchain(dim.width, dim.height, format)
                             .expect("Failed to recreate swapchain");
                         app.on_recreate_swapchain(&base_app)
                             .expect("Error on recreate swapchain callback");
@@ -217,7 +242,7 @@ pub fn run<A: App + 'static>(
                 base_app.camera = base_app.camera.update(&controls, frame_stats.frame_time);
 
                 is_swapchain_dirty = base_app
-                    .draw(&window, app, &mut gui_context, &mut ui, &mut frame_stats)
+                    .draw(&window, app, &mut ui, &mut frame_stats)
                     .expect("Failed to tick");
             }
 
@@ -247,12 +272,19 @@ fn create_window(app_name: &str, width: u32, height: u32) -> Result<(Window, Eve
 }
 
 impl<B: App> BaseApp<B> {
-    fn new(window: &Window, app_name: &str, enable_raytracing: bool) -> Result<Self> {
+    fn new(window: &Window, app_name: &str, app_config: AppConfig) -> Result<Self> {
         log::info!("Create application");
+
+        let AppConfig {
+            enable_raytracing,
+            required_instance_extensions,
+            ui_framebuffer_format,
+            skip_drawing_ui,
+        } = app_config;
 
         // Vulkan context
         let mut required_extensions = vec!["VK_KHR_swapchain"];
-        if enable_raytracing {
+        if app_config.enable_raytracing {
             required_extensions.push("VK_KHR_ray_tracing_pipeline");
             required_extensions.push("VK_KHR_acceleration_structure");
             required_extensions.push("VK_KHR_deferred_host_operations");
@@ -261,7 +293,8 @@ impl<B: App> BaseApp<B> {
         let mut context = ContextBuilder::new(window, window)
             .vulkan_version(VERSION_1_3)
             .app_name(app_name)
-            .required_extensions(&required_extensions)
+            .required_instance_extensions(required_instance_extensions)
+            .required_device_extensions(&required_extensions)
             .required_device_features(DeviceFeatures {
                 ray_tracing_pipeline: enable_raytracing,
                 acceleration_structure: enable_raytracing,
@@ -308,9 +341,13 @@ impl<B: App> BaseApp<B> {
             10.0,
         );
 
+        let ui_format = ui_framebuffer_format.unwrap_or(swapchain.format);
+        let gui_context = GuiContext::new(&context, ui_format, window, IN_FLIGHT_FRAMES as _)?;
+
         Ok(Self {
             phantom: PhantomData,
             raytracing_enabled: enable_raytracing,
+            skip_drawing_ui,
             context,
             command_pool,
             swapchain,
@@ -319,16 +356,29 @@ impl<B: App> BaseApp<B> {
             in_flight_frames,
             camera,
             stats_display_mode: StatsDisplayMode::Basic,
+            gui_context,
+
+            requested_swapchain_format: None,
         })
     }
 
-    fn recreate_swapchain(&mut self, width: u32, height: u32) -> Result<()> {
+    pub fn request_swapchain_format_change(&mut self, format: vk::SurfaceFormatKHR) {
+        self.requested_swapchain_format = Some(format);
+    }
+
+    fn recreate_swapchain(
+        &mut self,
+        width: u32,
+        height: u32,
+        format: Option<vk::SurfaceFormatKHR>,
+    ) -> Result<()> {
         log::debug!("Recreating the swapchain");
 
         self.wait_for_gpu()?;
 
         // Swapchain and dependent resources
-        self.swapchain.resize(&self.context, width, height)?;
+        self.swapchain
+            .update(&self.context, width, height, format)?;
 
         // Recreate storage image for RT and update descriptor set
         let storage_images = create_storage_images(
@@ -354,7 +404,6 @@ impl<B: App> BaseApp<B> {
         &mut self,
         window: &Window,
         base_app: &mut B,
-        gui_context: &mut GuiContext,
         gui: &mut B::Gui,
         frame_stats: &mut FrameStats,
     ) -> Result<bool> {
@@ -386,10 +435,11 @@ impl<B: App> BaseApp<B> {
 
         // UI
         if !self.in_flight_frames.gui_textures_to_free().is_empty() {
-            gui_context.free_textures(self.in_flight_frames.gui_textures_to_free())?;
+            self.gui_context
+                .free_textures(self.in_flight_frames.gui_textures_to_free())?;
         }
 
-        let raw_input = gui_context.take_input(window);
+        let raw_input = self.gui_context.take_input(window);
 
         let FullOutput {
             platform_output,
@@ -397,12 +447,13 @@ impl<B: App> BaseApp<B> {
             shapes,
             pixels_per_point,
             ..
-        } = gui_context.run(raw_input, |ctx| {
+        } = self.gui_context.run(raw_input, |ctx| {
             gui.build(ctx);
             self.build_perf_ui(ctx, frame_stats);
         });
 
-        gui_context.handle_platform_output(window, platform_output);
+        self.gui_context
+            .handle_platform_output(window, platform_output);
 
         if !textures_delta.free.is_empty() {
             self.in_flight_frames
@@ -410,7 +461,7 @@ impl<B: App> BaseApp<B> {
         }
 
         if !textures_delta.set.is_empty() {
-            gui_context
+            self.gui_context
                 .set_textures(
                     self.context.graphics_queue.inner,
                     self.context.command_pool.inner,
@@ -419,21 +470,13 @@ impl<B: App> BaseApp<B> {
                 .expect("Failed to update texture");
         }
 
-        let primitives = gui_context.tessellate(shapes, pixels_per_point);
+        let primitives = self.gui_context.tessellate(shapes, pixels_per_point);
 
         base_app.update(self, gui, image_index, frame_stats.frame_time)?;
 
+        self.record_command_buffer(image_index, base_app, pixels_per_point, &primitives)?;
+
         let command_buffer = &self.command_buffers[image_index];
-
-        self.record_command_buffer(
-            command_buffer,
-            image_index,
-            base_app,
-            &mut gui_context.renderer,
-            pixels_per_point,
-            &primitives,
-        )?;
-
         self.context.graphics_queue.submit(
             command_buffer,
             Some(SemaphoreSubmitInfo {
@@ -498,37 +541,37 @@ impl<B: App> BaseApp<B> {
     }
 
     fn record_command_buffer(
-        &self,
-        buffer: &CommandBuffer,
+        &mut self,
         image_index: usize,
         base_app: &B,
-        gui_renderer: &mut Renderer,
         pixels_per_point: f32,
         primitives: &[ClippedPrimitive],
     ) -> Result<()> {
-        let swapchain_image = &self.swapchain.images[image_index];
-        let swapchain_image_view = &self.swapchain.views[image_index];
+        self.command_buffers[image_index].reset()?;
 
-        buffer.reset()?;
+        self.command_buffers[image_index].begin(None)?;
 
-        buffer.begin(None)?;
+        self.command_buffers[image_index]
+            .reset_all_timestamp_queries_from_pool(self.in_flight_frames.timing_query_pool());
 
-        buffer.reset_all_timestamp_queries_from_pool(self.in_flight_frames.timing_query_pool());
-
-        buffer.write_timestamp(
+        self.command_buffers[image_index].write_timestamp(
             vk::PipelineStageFlags2::NONE,
             self.in_flight_frames.timing_query_pool(),
             0,
         );
 
         if self.raytracing_enabled {
-            base_app.record_raytracing_commands(self, buffer, image_index)?;
+            base_app.record_raytracing_commands(
+                self,
+                &self.command_buffers[image_index],
+                image_index,
+            )?;
 
             let storage_image = &self.storage_images[image_index].image;
             // Copy ray tracing result into swapchain
-            buffer.pipeline_image_barriers(&[
+            self.command_buffers[image_index].pipeline_image_barriers(&[
                 ImageBarrier {
-                    image: swapchain_image,
+                    image: &self.swapchain.images[image_index],
                     old_layout: vk::ImageLayout::UNDEFINED,
                     new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                     src_access_mask: vk::AccessFlags2::NONE,
@@ -547,16 +590,16 @@ impl<B: App> BaseApp<B> {
                 },
             ]);
 
-            buffer.copy_image(
+            self.command_buffers[image_index].copy_image(
                 storage_image,
                 vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-                swapchain_image,
+                &self.swapchain.images[image_index],
                 vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             );
 
-            buffer.pipeline_image_barriers(&[
+            self.command_buffers[image_index].pipeline_image_barriers(&[
                 ImageBarrier {
-                    image: swapchain_image,
+                    image: &self.swapchain.images[image_index],
                     old_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                     new_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
                     src_access_mask: vk::AccessFlags2::TRANSFER_WRITE,
@@ -577,8 +620,8 @@ impl<B: App> BaseApp<B> {
         }
 
         if !self.raytracing_enabled {
-            buffer.pipeline_image_barriers(&[ImageBarrier {
-                image: swapchain_image,
+            self.command_buffers[image_index].pipeline_image_barriers(&[ImageBarrier {
+                image: &self.swapchain.images[image_index],
                 old_layout: vk::ImageLayout::UNDEFINED,
                 new_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
                 src_access_mask: vk::AccessFlags2::NONE,
@@ -589,27 +632,30 @@ impl<B: App> BaseApp<B> {
         }
 
         // Rasterization
-        base_app.record_raster_commands(self, buffer, image_index)?;
+        base_app.record_raster_commands(self, image_index)?;
+        base_app.record_raster_commands_with_ui(self, image_index, pixels_per_point, primitives)?;
 
         // UI
-        buffer.begin_rendering(
-            swapchain_image_view,
-            self.swapchain.extent,
-            vk::AttachmentLoadOp::DONT_CARE,
-            None,
-        );
+        if !self.skip_drawing_ui {
+            self.command_buffers[image_index].begin_rendering(
+                &self.swapchain.views[image_index],
+                self.swapchain.extent,
+                vk::AttachmentLoadOp::DONT_CARE,
+                None,
+            );
 
-        gui_renderer.cmd_draw(
-            buffer.inner,
-            self.swapchain.extent,
-            pixels_per_point,
-            primitives,
-        )?;
+            self.gui_context.renderer.cmd_draw(
+                self.command_buffers[image_index].inner,
+                self.swapchain.extent,
+                pixels_per_point,
+                primitives,
+            )?;
 
-        buffer.end_rendering();
+            self.command_buffers[image_index].end_rendering();
+        }
 
-        buffer.pipeline_image_barriers(&[ImageBarrier {
-            image: swapchain_image,
+        self.command_buffers[image_index].pipeline_image_barriers(&[ImageBarrier {
+            image: &self.swapchain.images[image_index],
             old_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             new_layout: vk::ImageLayout::PRESENT_SRC_KHR,
             src_access_mask: vk::AccessFlags2::COLOR_ATTACHMENT_WRITE,
@@ -618,13 +664,13 @@ impl<B: App> BaseApp<B> {
             dst_stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
         }]);
 
-        buffer.write_timestamp(
+        self.command_buffers[image_index].write_timestamp(
             vk::PipelineStageFlags2::ALL_COMMANDS,
             self.in_flight_frames.timing_query_pool(),
             1,
         );
 
-        buffer.end()?;
+        self.command_buffers[image_index].end()?;
 
         Ok(())
     }

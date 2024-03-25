@@ -27,6 +27,7 @@ pub struct Context {
     pub present_queue_family: QueueFamily,
     pub graphics_queue_family: QueueFamily,
     pub physical_device: PhysicalDevice,
+    pub(crate) supported_surface_formats: Vec<vk::SurfaceFormatKHR>,
     pub surface: Surface,
     pub instance: Instance,
     _entry: Entry,
@@ -37,7 +38,8 @@ pub struct ContextBuilder<'a> {
     display_handle: &'a dyn HasRawDisplayHandle,
     vulkan_version: Version,
     app_name: &'a str,
-    required_extensions: &'a [&'a str],
+    required_instance_extensions: &'a [&'a str],
+    required_device_extensions: &'a [&'a str],
     required_device_features: DeviceFeatures,
     with_raytracing_context: bool,
 }
@@ -52,7 +54,8 @@ impl<'a> ContextBuilder<'a> {
             display_handle,
             vulkan_version: VERSION_1_0,
             app_name: "",
-            required_extensions: &[],
+            required_instance_extensions: &[],
+            required_device_extensions: &[],
             required_device_features: Default::default(),
             with_raytracing_context: false,
         }
@@ -69,9 +72,16 @@ impl<'a> ContextBuilder<'a> {
         Self { app_name, ..self }
     }
 
-    pub fn required_extensions(self, required_extensions: &'a [&str]) -> Self {
+    pub fn required_instance_extensions(self, required_instance_extensions: &'a [&str]) -> Self {
         Self {
-            required_extensions,
+            required_instance_extensions,
+            ..self
+        }
+    }
+
+    pub fn required_device_extensions(self, required_device_extensions: &'a [&str]) -> Self {
+        Self {
+            required_device_extensions,
             ..self
         }
     }
@@ -102,14 +112,21 @@ impl Context {
             display_handle,
             vulkan_version,
             app_name,
-            required_extensions,
+            required_instance_extensions,
+            required_device_extensions,
             required_device_features,
             with_raytracing_context,
         }: ContextBuilder,
     ) -> Result<Self> {
         // Vulkan instance
-        let entry = Entry::linked();
-        let mut instance = Instance::new(&entry, display_handle, vulkan_version, app_name)?;
+        let entry = unsafe { Entry::load()? };
+        let mut instance = Instance::new(
+            &entry,
+            display_handle,
+            vulkan_version,
+            app_name,
+            required_instance_extensions,
+        )?;
 
         // Vulkan surface
         let surface = Surface::new(&entry, &instance, window_handle, display_handle)?;
@@ -118,17 +135,23 @@ impl Context {
         let (physical_device, graphics_queue_family, present_queue_family) =
             select_suitable_physical_device(
                 physical_devices,
-                required_extensions,
+                required_device_extensions,
                 &required_device_features,
             )?;
         log::info!("Selected physical device: {:?}", physical_device.name);
+
+        let supported_surface_formats = unsafe {
+            surface
+                .inner
+                .get_physical_device_surface_formats(physical_device.inner, surface.surface_khr)?
+        };
 
         let queue_families = [graphics_queue_family, present_queue_family];
         let device = Arc::new(Device::new(
             &instance,
             &physical_device,
             &queue_families,
-            required_extensions,
+            required_device_extensions,
             &required_device_features,
             with_raytracing_context,
         )?);
@@ -180,6 +203,7 @@ impl Context {
             present_queue_family,
             graphics_queue_family,
             physical_device,
+            supported_surface_formats,
             surface,
             instance,
             _entry: entry,
@@ -270,5 +294,9 @@ impl Context {
         self.command_pool.free_command_buffer(&command_buffer)?;
 
         Ok(executor_result)
+    }
+
+    pub fn supported_surface_formats(&self) -> &[vk::SurfaceFormatKHR] {
+        &self.supported_surface_formats
     }
 }
