@@ -28,7 +28,7 @@ const MIN_ATTRACTOR_STRENGTH: u32 = 0;
 const MAX_ATTRACTOR_STRENGTH: u32 = 100;
 
 fn main() -> Result<()> {
-    app::run::<Particles>(APP_NAME, WIDTH, HEIGHT, false)
+    app::run::<Particles>(APP_NAME, WIDTH, HEIGHT, Default::default())
 }
 struct Particles {
     particle_count: u32,

@@ -37,7 +37,8 @@ pub struct ContextBuilder<'a> {
     display_handle: &'a dyn HasRawDisplayHandle,
     vulkan_version: Version,
     app_name: &'a str,
-    required_extensions: &'a [&'a str],
+    required_instance_extensions: &'a [&'a str],
+    required_device_extensions: &'a [&'a str],
     required_device_features: DeviceFeatures,
     with_raytracing_context: bool,
 }
@@ -52,7 +53,8 @@ impl<'a> ContextBuilder<'a> {
             display_handle,
             vulkan_version: VERSION_1_0,
             app_name: "",
-            required_extensions: &[],
+            required_instance_extensions: &[],
+            required_device_extensions: &[],
             required_device_features: Default::default(),
             with_raytracing_context: false,
         }
@@ -69,9 +71,16 @@ impl<'a> ContextBuilder<'a> {
         Self { app_name, ..self }
     }
 
-    pub fn required_extensions(self, required_extensions: &'a [&str]) -> Self {
+    pub fn required_instance_extensions(self, required_instance_extensions: &'a [&str]) -> Self {
         Self {
-            required_extensions,
+            required_instance_extensions,
+            ..self
+        }
+    }
+
+    pub fn required_device_extensions(self, required_device_extensions: &'a [&str]) -> Self {
+        Self {
+            required_device_extensions,
             ..self
         }
     }
@@ -102,14 +111,21 @@ impl Context {
             display_handle,
             vulkan_version,
             app_name,
-            required_extensions,
+            required_instance_extensions,
+            required_device_extensions,
             required_device_features,
             with_raytracing_context,
         }: ContextBuilder,
     ) -> Result<Self> {
         // Vulkan instance
         let entry = Entry::linked();
-        let mut instance = Instance::new(&entry, display_handle, vulkan_version, app_name)?;
+        let mut instance = Instance::new(
+            &entry,
+            display_handle,
+            vulkan_version,
+            app_name,
+            required_instance_extensions,
+        )?;
 
         // Vulkan surface
         let surface = Surface::new(&entry, &instance, window_handle, display_handle)?;
@@ -118,7 +134,7 @@ impl Context {
         let (physical_device, graphics_queue_family, present_queue_family) =
             select_suitable_physical_device(
                 physical_devices,
-                required_extensions,
+                required_device_extensions,
                 &required_device_features,
             )?;
         log::info!("Selected physical device: {:?}", physical_device.name);
@@ -128,7 +144,7 @@ impl Context {
             &instance,
             &physical_device,
             &queue_families,
-            required_extensions,
+            required_device_extensions,
             &required_device_features,
         )?);
         let graphics_queue = device.get_queue(graphics_queue_family, 0);

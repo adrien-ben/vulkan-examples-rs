@@ -105,6 +105,10 @@ impl Camera {
         )
     }
 
+    pub fn view_matrix_at_center(&self) -> Mat4 {
+        Mat4::look_at_rh(Vec3::ZERO, self.direction, vec3(0.0, 1.0, 0.0))
+    }
+
     pub fn projection_matrix(&self) -> Mat4 {
         perspective(
             self.fov.to_radians(),

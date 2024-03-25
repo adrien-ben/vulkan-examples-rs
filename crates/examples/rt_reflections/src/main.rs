@@ -3,7 +3,7 @@ use app::glam::{vec3, Mat4};
 use app::vulkan::ash::vk::{self, Packed24_8};
 use app::vulkan::gpu_allocator::MemoryLocation;
 use app::vulkan::utils::*;
-use app::{vulkan::*, BaseApp};
+use app::{vulkan::*, AppConfig, BaseApp};
 use app::{App, ImageAndView};
 use gltf::Vertex;
 use gui::egui::{self, Widget};
@@ -18,7 +18,15 @@ const MODEL_PATH: &str = "./assets/models/reflections.glb";
 const MAX_DEPTH: u32 = 10;
 
 fn main() -> Result<()> {
-    app::run::<Reflections>(APP_NAME, WIDTH, HEIGHT, true)
+    app::run::<Reflections>(
+        APP_NAME,
+        WIDTH,
+        HEIGHT,
+        AppConfig {
+            enable_raytracing: true,
+            ..Default::default()
+        },
+    )
 }
 
 struct Reflections {

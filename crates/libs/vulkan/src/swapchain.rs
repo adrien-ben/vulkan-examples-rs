@@ -23,33 +23,44 @@ pub struct Swapchain {
 }
 
 impl Swapchain {
-    pub fn new(context: &Context, width: u32, height: u32) -> Result<Self> {
+    pub fn new(
+        context: &Context,
+        width: u32,
+        height: u32,
+        preferred_format: Option<vk::SurfaceFormatKHR>,
+    ) -> Result<Self> {
         log::debug!("Creating vulkan swapchain");
 
         let device = context.device.clone();
 
         // Swapchain format
-        let format = {
-            let formats = unsafe {
-                context.surface.inner.get_physical_device_surface_formats(
-                    context.physical_device.inner,
-                    context.surface.surface_khr,
-                )?
-            };
-            if formats.len() == 1 && formats[0].format == vk::Format::UNDEFINED {
-                vk::SurfaceFormatKHR {
-                    format: vk::Format::B8G8R8A8_UNORM,
-                    color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
-                }
-            } else {
-                *formats
-                    .iter()
-                    .find(|format| {
-                        format.format == vk::Format::B8G8R8A8_UNORM
-                            && format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR
-                    })
-                    .unwrap_or(&formats[0])
+        let formats = unsafe {
+            context.surface.inner.get_physical_device_surface_formats(
+                context.physical_device.inner,
+                context.surface.surface_khr,
+            )?
+        };
+
+        let format = if let Some(preferred) = preferred_format {
+            formats
+                .into_iter()
+                .find(|format| {
+                    format.format == preferred.format && format.color_space == preferred.color_space
+                })
+                .ok_or(anyhow::anyhow!("Preferred format is not supported"))?
+        } else if formats.len() == 1 && formats[0].format == vk::Format::UNDEFINED {
+            vk::SurfaceFormatKHR {
+                format: vk::Format::B8G8R8A8_UNORM,
+                color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
             }
+        } else {
+            *formats
+                .iter()
+                .find(|format| {
+                    format.format == vk::Format::B8G8R8A8_UNORM
+                        && format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR
+                })
+                .unwrap_or(&formats[0])
         };
         log::debug!("Swapchain format: {format:?}");
 

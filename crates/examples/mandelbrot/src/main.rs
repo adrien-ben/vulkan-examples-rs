@@ -15,7 +15,7 @@ const HEIGHT: u32 = 576;
 const APP_NAME: &str = "Mandelbrot";
 
 fn main() -> Result<()> {
-    app::run::<Mandelbrot>(APP_NAME, WIDTH, HEIGHT, false)
+    app::run::<Mandelbrot>(APP_NAME, WIDTH, HEIGHT, Default::default())
 }
 struct Mandelbrot {
     vertex_buffer: Buffer,

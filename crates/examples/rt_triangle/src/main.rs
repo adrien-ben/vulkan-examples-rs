@@ -1,7 +1,7 @@
 use app::anyhow::Result;
 use app::vulkan::ash::vk::{self, Packed24_8};
 use app::vulkan::utils::*;
-use app::{vulkan::*, BaseApp};
+use app::{vulkan::*, AppConfig, BaseApp};
 use app::{App, ImageAndView};
 use std::mem::size_of;
 use std::time::Duration;
@@ -11,7 +11,15 @@ const HEIGHT: u32 = 576;
 const APP_NAME: &str = "Ray traced triangle";
 
 fn main() -> Result<()> {
-    app::run::<Triangle>(APP_NAME, WIDTH, HEIGHT, true)
+    app::run::<Triangle>(
+        APP_NAME,
+        WIDTH,
+        HEIGHT,
+        AppConfig {
+            enable_raytracing: true,
+            ..Default::default()
+        },
+    )
 }
 
 struct Triangle {

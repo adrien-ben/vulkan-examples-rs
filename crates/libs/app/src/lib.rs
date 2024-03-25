@@ -44,6 +44,13 @@ pub struct BaseApp<B: App> {
     stats_display_mode: StatsDisplayMode,
 }
 
+#[derive(Debug, Default)]
+pub struct AppConfig<'a, 'b> {
+    pub enable_raytracing: bool,
+    pub preferred_swapchain_format: Option<vk::SurfaceFormatKHR>,
+    pub required_instance_extensions: &'a [&'b str],
+}
+
 pub trait App: Sized {
     type Gui: Gui;
 
@@ -123,12 +130,12 @@ pub fn run<A: App + 'static>(
     app_name: &str,
     width: u32,
     height: u32,
-    enable_raytracing: bool,
+    app_config: AppConfig,
 ) -> Result<()> {
     SimpleLogger::default().env().init()?;
 
     let (window, event_loop) = create_window(app_name, width, height)?;
-    let mut base_app = BaseApp::new(&window, app_name, enable_raytracing)?;
+    let mut base_app = BaseApp::new(&window, app_name, app_config)?;
     let mut ui = A::Gui::new()?;
     let mut app = A::new(&mut base_app)?;
     let mut gui_context = GuiContext::new(
@@ -247,12 +254,18 @@ fn create_window(app_name: &str, width: u32, height: u32) -> Result<(Window, Eve
 }
 
 impl<B: App> BaseApp<B> {
-    fn new(window: &Window, app_name: &str, enable_raytracing: bool) -> Result<Self> {
+    fn new(window: &Window, app_name: &str, app_config: AppConfig) -> Result<Self> {
         log::info!("Create application");
+
+        let AppConfig {
+            enable_raytracing,
+            preferred_swapchain_format,
+            required_instance_extensions,
+        } = app_config;
 
         // Vulkan context
         let mut required_extensions = vec!["VK_KHR_swapchain"];
-        if enable_raytracing {
+        if app_config.enable_raytracing {
             required_extensions.push("VK_KHR_ray_tracing_pipeline");
             required_extensions.push("VK_KHR_acceleration_structure");
             required_extensions.push("VK_KHR_deferred_host_operations");
@@ -261,7 +274,8 @@ impl<B: App> BaseApp<B> {
         let mut context = ContextBuilder::new(window, window)
             .vulkan_version(VERSION_1_3)
             .app_name(app_name)
-            .required_extensions(&required_extensions)
+            .required_instance_extensions(required_instance_extensions)
+            .required_device_extensions(&required_extensions)
             .required_device_features(DeviceFeatures {
                 ray_tracing_pipeline: enable_raytracing,
                 acceleration_structure: enable_raytracing,
@@ -282,6 +296,7 @@ impl<B: App> BaseApp<B> {
             &context,
             window.inner_size().width,
             window.inner_size().height,
+            preferred_swapchain_format,
         )?;
 
         let storage_images = if enable_raytracing {

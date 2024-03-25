@@ -19,6 +19,7 @@ impl Instance {
         display_handle: &dyn HasRawDisplayHandle,
         api_version: Version,
         app_name: &str,
+        required_extensions: &[&str],
     ) -> Result<Self> {
         // Vulkan instance
         let app_name = CString::new(app_name)?;
@@ -27,10 +28,21 @@ impl Instance {
             .application_name(app_name.as_c_str())
             .api_version(api_version.make_api_version());
 
+        // Extension support
         let mut extension_names =
             ash_window::enumerate_required_extensions(display_handle.raw_display_handle())?
                 .to_vec();
         extension_names.push(DebugUtils::name().as_ptr());
+
+        let required_extensions_c = required_extensions
+            .iter()
+            .map(|e| CString::new(*e).unwrap())
+            .collect::<Vec<_>>();
+        required_extensions_c.iter().for_each(|e| {
+            extension_names.push(e.as_ptr());
+        });
+
+        check_extensions_support(entry, &extension_names)?;
 
         let instance_create_info = vk::InstanceCreateInfo::builder()
             .application_info(&app_info)
@@ -87,6 +99,23 @@ impl Instance {
 
         Ok(&self.physical_devices)
     }
+}
+
+fn check_extensions_support(entry: &Entry, required: &[*const i8]) -> Result<()> {
+    let supported = entry.enumerate_instance_extension_properties(None)?;
+
+    for r in required {
+        let r = unsafe { CStr::from_ptr(*r) };
+
+        if !supported.iter().any(|s| {
+            let s = unsafe { CStr::from_ptr(s.extension_name.as_ptr()) };
+            r == s
+        }) {
+            return Err(anyhow::anyhow!("Unsupported extension: {:?}", r));
+        }
+    }
+
+    Ok(())
 }
 
 unsafe extern "system" fn vulkan_debug_callback(

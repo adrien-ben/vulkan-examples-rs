@@ -6,6 +6,7 @@ members = [
     "crates/examples/triangle",
     "crates/examples/gpu_particles",
     "crates/examples/mandelbrot",
+    "crates/examples/hdr_skybox",
     "crates/libs/*",
 ]
 resolver = "2"
@@ -26,6 +27,7 @@ ron = "0.8"
 num_cpus = "1.13"
 rand = "0.8"
 image = "0.25"
+rfd = "0.14"
 
 gltf = "1.0"
 glam = { version = "0.27", features = ["serde"] }

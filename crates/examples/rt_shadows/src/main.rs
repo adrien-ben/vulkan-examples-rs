@@ -3,7 +3,7 @@ use app::glam::{vec3, Mat4};
 use app::vulkan::ash::vk::{self, Packed24_8};
 use app::vulkan::gpu_allocator::MemoryLocation;
 use app::vulkan::utils::*;
-use app::{vulkan::*, BaseApp};
+use app::{vulkan::*, AppConfig, BaseApp};
 use app::{App, ImageAndView};
 use gltf::Vertex;
 use gui::egui::{self, Widget};
@@ -17,7 +17,15 @@ const APP_NAME: &str = "Ray traced shadows";
 const MODEL_PATH: &str = "./assets/models/shadows.glb";
 
 fn main() -> Result<()> {
-    app::run::<Shadows>(APP_NAME, WIDTH, HEIGHT, true)
+    app::run::<Shadows>(
+        APP_NAME,
+        WIDTH,
+        HEIGHT,
+        AppConfig {
+            enable_raytracing: true,
+            ..Default::default()
+        },
+    )
 }
 
 struct Shadows {
