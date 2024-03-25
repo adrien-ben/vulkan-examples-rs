@@ -6,7 +6,7 @@ use app::vulkan::utils::*;
 use app::{vulkan::*, BaseApp};
 use app::{App, ImageAndView};
 use gltf::Vertex;
-use gui::imgui::{Condition, Ui};
+use gui::egui::{self, Widget};
 use std::mem::{size_of, size_of_val};
 use std::time::Duration;
 
@@ -170,26 +170,35 @@ impl app::Gui for Gui {
     fn new() -> Result<Self> {
         Ok(Gui {
             light: Light {
-                direction: [-2.0, -1.0, -2.0],
+                direction: [-1.0, -0.5, -1.0],
                 color: [1.0; 3],
             },
         })
     }
 
-    fn build(&mut self, ui: &Ui) {
-        ui.window("Vulkan RT")
-            .size([300.0, 350.0], Condition::FirstUseEver)
-            .build(|| {
-                ui.text_wrapped("Light");
-                ui.separator();
-
-                ui.input_float3("direction", &mut self.light.direction)
-                    .build();
-
-                ui.color_picker3_config("color", &mut self.light.color)
-                    .display_rgb(true)
-                    .build();
+    fn build(&mut self, ctx: &egui::Context) {
+        egui::Window::new("Settings").show(ctx, |ui| {
+            ui.label("Light");
+            ui.separator();
+            ui.horizontal(|ui| {
+                ui.label("x");
+                egui::DragValue::new(&mut self.light.direction[0])
+                    .speed(0.05)
+                    .ui(ui);
+                ui.label("y");
+                egui::DragValue::new(&mut self.light.direction[1])
+                    .speed(0.05)
+                    .ui(ui);
+                ui.label("z");
+                egui::DragValue::new(&mut self.light.direction[2])
+                    .speed(0.05)
+                    .ui(ui);
             });
+            ui.horizontal(|ui| {
+                ui.label("color");
+                ui.color_edit_button_rgb(&mut self.light.color);
+            });
+        });
     }
 }
 
@@ -475,7 +484,7 @@ fn create_bottom_as(context: &mut Context, model: &Model) -> Result<BottomAS> {
     for (node_index, node) in model.gltf.nodes.iter().enumerate() {
         let mesh = node.mesh;
 
-        let primitive_count = (mesh.index_count / 3) as u32;
+        let primitive_count = mesh.index_count / 3;
 
         geometry_infos.push(GeometryInfo {
             transform: Mat4::from_cols_array_2d(&node.transform),

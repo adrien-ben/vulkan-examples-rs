@@ -1,3 +1,4 @@
+use std::mem::{offset_of, size_of};
 use std::time::Duration;
 
 use app::anyhow::Result;
@@ -80,6 +81,7 @@ impl App for Mandelbrot {
 
 #[derive(Debug, Clone, Copy)]
 #[allow(dead_code)]
+#[repr(C)]
 struct Vertex {
     position: [f32; 2],
     uv: [f32; 2],
@@ -89,7 +91,7 @@ impl app::vulkan::Vertex for Vertex {
     fn bindings() -> Vec<vk::VertexInputBindingDescription> {
         vec![vk::VertexInputBindingDescription {
             binding: 0,
-            stride: 16,
+            stride: size_of::<Vertex>() as _,
             input_rate: vk::VertexInputRate::VERTEX,
         }]
     }
@@ -100,13 +102,13 @@ impl app::vulkan::Vertex for Vertex {
                 binding: 0,
                 location: 0,
                 format: vk::Format::R32G32_SFLOAT,
-                offset: 0,
+                offset: offset_of!(Vertex, position) as _,
             },
             vk::VertexInputAttributeDescription {
                 binding: 0,
                 location: 1,
                 format: vk::Format::R32G32_SFLOAT,
-                offset: 8,
+                offset: offset_of!(Vertex, uv) as _,
             },
         ]
     }

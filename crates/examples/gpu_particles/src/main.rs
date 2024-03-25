@@ -1,4 +1,4 @@
-use std::mem::size_of;
+use std::mem::{offset_of, size_of};
 use std::time::{Duration, Instant};
 
 use app::anyhow::Result;
@@ -13,7 +13,7 @@ use app::vulkan::{
     WriteDescriptorSet, WriteDescriptorSetKind,
 };
 use app::{log, App, BaseApp};
-use gui::imgui::{Condition, Ui};
+use gui::egui::{self, Widget};
 use rand::Rng;
 
 const WIDTH: u32 = 1024;
@@ -294,44 +294,59 @@ impl app::Gui for Gui {
         })
     }
 
-    fn build(&mut self, ui: &Ui) {
-        ui.window("Particles")
-            .position([5.0, 5.0], Condition::FirstUseEver)
-            .size([300.0, 250.0], Condition::FirstUseEver)
-            .resizable(false)
-            .movable(false)
-            .build(|| {
-                ui.text("Particles");
-                ui.slider("Count", 0, MAX_PARTICLE_COUNT, &mut self.particle_count);
-                ui.slider_config("Size", MIN_PARTICLE_SIZE, MAX_PARTICLE_SIZE)
-                    .display_format("%.1f")
-                    .build(&mut self.particle_size);
-                ui.color_edit4_config("Color 1", &mut self.color1)
-                    .alpha(false)
-                    .tooltip(false)
-                    .build();
-                ui.color_edit4_config("Color 2", &mut self.color2)
-                    .alpha(false)
-                    .tooltip(false)
-                    .build();
-                ui.color_edit4_config("Color 3", &mut self.color3)
-                    .alpha(false)
-                    .tooltip(false)
-                    .build();
-                ui.text("Attractor");
-                ui.slider(
-                    "Strength",
-                    MIN_ATTRACTOR_STRENGTH,
-                    MAX_ATTRACTOR_STRENGTH,
-                    &mut self.attractor_strength,
-                );
-                ui.input_float3("Position", &mut self.attractor_position)
-                    .build();
-                if ui.button("Apply") {
+    fn build(&mut self, ctx: &egui::Context) {
+        egui::Window::new("Particles").show(ctx, |ui| {
+            ui.label("Particles");
+            egui::Slider::new(&mut self.particle_count, 0..=MAX_PARTICLE_COUNT)
+                .text("Count")
+                .ui(ui);
+            egui::Slider::new(
+                &mut self.particle_size,
+                MIN_PARTICLE_SIZE..=MAX_PARTICLE_SIZE,
+            )
+            .text("Size")
+            .ui(ui);
+            ui.horizontal(|ui| {
+                let label = ui.label("Color 1");
+                ui.color_edit_button_rgba_premultiplied(&mut self.color1)
+                    .labelled_by(label.id);
+            });
+            ui.horizontal(|ui| {
+                let label = ui.label("Color 2");
+                ui.color_edit_button_rgba_premultiplied(&mut self.color2)
+                    .labelled_by(label.id);
+            });
+            ui.horizontal(|ui| {
+                let label = ui.label("Color 3");
+                ui.color_edit_button_rgba_premultiplied(&mut self.color3)
+                    .labelled_by(label.id);
+            });
+
+            ui.label("Attractor");
+            egui::Slider::new(
+                &mut self.attractor_strength,
+                MIN_ATTRACTOR_STRENGTH..=MAX_ATTRACTOR_STRENGTH,
+            )
+            .text("Strength")
+            .ui(ui);
+            ui.horizontal(|ui| {
+                ui.label("Position");
+                egui::DragValue::new(&mut self.attractor_position[0])
+                    .speed(0.1)
+                    .ui(ui);
+                egui::DragValue::new(&mut self.attractor_position[1])
+                    .speed(0.1)
+                    .ui(ui);
+                egui::DragValue::new(&mut self.attractor_position[2])
+                    .speed(0.1)
+                    .ui(ui);
+            });
+            ui.horizontal(|ui| {
+                if ui.button("Apply").clicked() {
                     self.new_attractor_position = Some(self.attractor_position);
                 }
-                ui.same_line();
-                if ui.button("Randomize") {
+
+                if ui.button("Randomize").clicked() {
                     let mut rng = rand::thread_rng();
                     let new_position = [
                         rng.gen_range(-1.0..1.0),
@@ -341,18 +356,20 @@ impl app::Gui for Gui {
                     self.attractor_position = new_position;
                     self.new_attractor_position = Some(new_position);
                 }
-                ui.same_line();
-                if ui.button("Reset") {
-                    let new_position = [0.0; 3];
-                    self.attractor_position = new_position;
-                    self.new_attractor_position = Some(new_position);
-                }
             });
+
+            if ui.button("Reset").clicked() {
+                let new_position = [0.0; 3];
+                self.attractor_position = new_position;
+                self.new_attractor_position = Some(new_position);
+            }
+        });
     }
 }
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
+#[repr(C)]
 struct ComputeUbo {
     attractor_center: [f32; 4],
     color1: [f32; 4],
@@ -365,6 +382,7 @@ struct ComputeUbo {
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
+#[repr(C)]
 struct GraphicsUbo {
     view_proj_matrix: Mat4,
     particle_size: f32,
@@ -372,6 +390,7 @@ struct GraphicsUbo {
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
+#[repr(C)]
 struct Particle {
     // position 0, 1, 2 - pad 3
     position: [f32; 4],
@@ -384,7 +403,7 @@ impl Vertex for Particle {
     fn bindings() -> Vec<vk::VertexInputBindingDescription> {
         vec![vk::VertexInputBindingDescription {
             binding: 0,
-            stride: 48,
+            stride: size_of::<Particle>() as _,
             input_rate: vk::VertexInputRate::VERTEX,
         }]
     }
@@ -395,13 +414,13 @@ impl Vertex for Particle {
                 binding: 0,
                 location: 0,
                 format: vk::Format::R32G32B32_SFLOAT,
-                offset: 0,
+                offset: offset_of!(Particle, position) as _,
             },
             vk::VertexInputAttributeDescription {
                 binding: 0,
                 location: 1,
                 format: vk::Format::R32G32B32A32_SFLOAT,
-                offset: 32,
+                offset: offset_of!(Particle, color) as _,
             },
         ]
     }

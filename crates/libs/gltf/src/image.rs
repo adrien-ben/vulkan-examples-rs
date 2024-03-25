@@ -41,8 +41,8 @@ impl<'a> PixelIter<'a> {
         let pixel_size = match format {
             R8 => 1,
             R8G8 => 2,
-            R8G8B8 | B8G8R8 => 3,
-            R8G8B8A8 | B8G8R8A8 => 4,
+            R8G8B8 => 3,
+            R8G8B8A8 => 4,
             _ => return Err(Error::Support("16 bytes images".to_string())),
         };
 
@@ -85,19 +85,6 @@ impl<'a> Iterator for PixelIter<'a> {
                 let r = self.pixels[self.position];
                 let g = self.pixels[self.position + 1];
                 let b = self.pixels[self.position + 2];
-                let a = self.pixels[self.position + 3];
-                Some([r, g, b, a])
-            }
-            Format::B8G8R8 => {
-                let b = self.pixels[self.position];
-                let g = self.pixels[self.position + 1];
-                let r = self.pixels[self.position + 2];
-                Some([r, g, b, MAX])
-            }
-            Format::B8G8R8A8 => {
-                let b = self.pixels[self.position];
-                let g = self.pixels[self.position + 1];
-                let r = self.pixels[self.position + 2];
                 let a = self.pixels[self.position + 3];
                 Some([r, g, b, a])
             }

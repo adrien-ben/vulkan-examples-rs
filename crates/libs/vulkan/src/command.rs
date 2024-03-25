@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use ash::vk;
+use ash::vk::{self, IndexType};
 
 use crate::{
     device::Device, Buffer, ComputePipeline, Context, DescriptorSet, GraphicsPipeline, Image,
@@ -173,11 +173,27 @@ impl CommandBuffer {
         };
     }
 
+    pub fn bind_index_buffer(&self, index_buffer: &Buffer, index_type: IndexType) {
+        unsafe {
+            self.device
+                .inner
+                .cmd_bind_index_buffer(self.inner, index_buffer.inner, 0, index_type)
+        };
+    }
+
     pub fn draw(&self, vertex_count: u32) {
         unsafe {
             self.device
                 .inner
                 .cmd_draw(self.inner, vertex_count, 1, 0, 0)
+        };
+    }
+
+    pub fn draw_indexed(&self, index_count: u32) {
+        unsafe {
+            self.device
+                .inner
+                .cmd_draw_indexed(self.inner, index_count, 1, 0, 0, 0)
         };
     }
 

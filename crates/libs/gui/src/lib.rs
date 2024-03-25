@@ -1,90 +1,106 @@
-pub extern crate imgui;
-pub extern crate imgui_rs_vulkan_renderer;
-pub extern crate imgui_winit_support;
-
-use std::time::Duration;
+pub extern crate egui;
+pub extern crate egui_ash_renderer;
+pub extern crate egui_winit;
 
 use anyhow::Result;
-use imgui::{Context, DrawData, FontConfig, FontSource};
-use imgui_rs_vulkan_renderer::{DynamicRendering, Options, Renderer};
-use imgui_winit_support::{HiDpiMode, WinitPlatform};
-use vulkan::{ash::vk, CommandBuffer, CommandPool, Context as VkContext};
-use winit::{event::Event, window::Window};
+use egui::{
+    epaint::{ClippedShape, ImageDelta},
+    ClippedPrimitive, Context as EguiContext, FullOutput, PlatformOutput, RawInput, TextureId,
+    ViewportId,
+};
+use egui_ash_renderer::{DynamicRendering, Options, Renderer};
+use egui_winit::State as EguiWinit;
+use vulkan::{ash::vk, CommandBuffer, Context as VkContext};
+use winit::{event::WindowEvent, window::Window};
 
 pub struct GuiContext {
-    pub imgui: Context,
-    pub platform: WinitPlatform,
+    pub egui: EguiContext,
+    pub egui_winit: EguiWinit,
     pub renderer: Renderer,
 }
 
 impl GuiContext {
     pub fn new(
         context: &VkContext,
-        command_pool: &CommandPool,
         format: vk::Format,
         window: &Window,
         in_flight_frames: usize,
     ) -> Result<Self> {
-        let mut imgui = Context::create();
-        imgui.set_ini_filename(None);
-
-        let mut platform = WinitPlatform::init(&mut imgui);
-
-        let hidpi_factor = platform.hidpi_factor();
-        let font_size = (13.0 * hidpi_factor) as f32;
-        imgui.fonts().add_font(&[
-            FontSource::DefaultFontData {
-                config: Some(FontConfig {
-                    size_pixels: font_size,
-                    ..FontConfig::default()
-                }),
-            },
-            FontSource::TtfData {
-                data: include_bytes!("../../../../assets/fonts/mplus-1p-regular.ttf"),
-                size_pixels: font_size,
-                config: Some(FontConfig {
-                    rasterizer_multiply: 1.75,
-                    ..FontConfig::default()
-                }),
-            },
-        ]);
-        imgui.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
-        platform.attach_window(imgui.io_mut(), window, HiDpiMode::Rounded);
+        let egui = EguiContext::default();
+        let platform = EguiWinit::new(egui.clone(), ViewportId::ROOT, &window, None, None);
 
         let gui_renderer = Renderer::with_gpu_allocator(
             context.allocator.clone(),
             context.device.inner.clone(),
-            context.graphics_queue.inner,
-            command_pool.inner,
             DynamicRendering {
                 color_attachment_format: format,
                 depth_attachment_format: None,
             },
-            &mut imgui,
-            Some(Options {
+            Options {
                 in_flight_frames,
                 ..Default::default()
-            }),
+            },
         )?;
 
         Ok(Self {
-            imgui,
-            platform,
+            egui,
+            egui_winit: platform,
             renderer: gui_renderer,
         })
     }
 
-    pub fn handle_event<T>(&mut self, window: &Window, event: &Event<T>) {
-        self.platform
-            .handle_event(self.imgui.io_mut(), window, event);
+    pub fn handle_event(&mut self, window: &Window, event: &WindowEvent) {
+        let _ = self.egui_winit.on_window_event(window, event);
     }
 
-    pub fn update_delta_time(&mut self, delta: Duration) {
-        self.imgui.io_mut().update_delta_time(delta);
+    pub fn take_input(&mut self, window: &Window) -> RawInput {
+        self.egui_winit.take_egui_input(window)
     }
 
-    pub fn cmd_draw(&mut self, buffer: &CommandBuffer, draw_data: &DrawData) -> Result<()> {
-        self.renderer.cmd_draw(buffer.inner, draw_data)?;
+    pub fn run(&self, new_input: RawInput, run_ui: impl FnOnce(&egui::Context)) -> FullOutput {
+        self.egui.run(new_input, run_ui)
+    }
+
+    pub fn handle_platform_output(&mut self, window: &Window, platform_output: PlatformOutput) {
+        self.egui_winit
+            .handle_platform_output(window, platform_output)
+    }
+
+    pub fn set_textures(
+        &mut self,
+        queue: vk::Queue,
+        command_pool: vk::CommandPool,
+        textures_delta: &[(TextureId, ImageDelta)],
+    ) -> Result<()> {
+        self.renderer
+            .set_textures(queue, command_pool, textures_delta)?;
+
+        Ok(())
+    }
+
+    pub fn free_textures(&mut self, ids: &[TextureId]) -> Result<()> {
+        self.renderer.free_textures(ids)?;
+
+        Ok(())
+    }
+
+    pub fn tessellate(
+        &self,
+        shapes: Vec<ClippedShape>,
+        pixels_per_point: f32,
+    ) -> Vec<ClippedPrimitive> {
+        self.egui.tessellate(shapes, pixels_per_point)
+    }
+
+    pub fn cmd_draw(
+        &mut self,
+        command_buffer: &CommandBuffer,
+        extent: vk::Extent2D,
+        pixels_per_point: f32,
+        primitives: &[ClippedPrimitive],
+    ) -> Result<()> {
+        self.renderer
+            .cmd_draw(command_buffer.inner, extent, pixels_per_point, primitives)?;
 
         Ok(())
     }

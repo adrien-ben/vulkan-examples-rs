@@ -11,8 +11,8 @@ use camera::{Camera, Controls};
 use glam::vec3;
 use gpu_allocator::MemoryLocation;
 use gui::{
-    imgui::{DrawData, Ui},
-    imgui_rs_vulkan_renderer::Renderer,
+    egui::{self, Align2, ClippedPrimitive, FullOutput, TextureId},
+    egui_ash_renderer::Renderer,
     GuiContext,
 };
 use simple_logger::SimpleLogger;
@@ -23,8 +23,9 @@ use std::{
 use vulkan::*;
 use winit::{
     dpi::PhysicalSize,
-    event::{ElementState, Event, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent},
+    event::{ElementState, Event, KeyEvent, MouseButton, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
+    keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowBuilder},
 };
 
@@ -90,7 +91,7 @@ pub trait App: Sized {
 pub trait Gui: Sized {
     fn new() -> Result<Self>;
 
-    fn build(&mut self, ui: &Ui);
+    fn build(&mut self, ui: &egui::Context);
 }
 
 impl Gui for () {
@@ -98,7 +99,7 @@ impl Gui for () {
         Ok(())
     }
 
-    fn build(&mut self, _ui: &Ui) {}
+    fn build(&mut self, _ui: &egui::Context) {}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,13 +127,12 @@ pub fn run<A: App + 'static>(
 ) -> Result<()> {
     SimpleLogger::default().env().init()?;
 
-    let (window, event_loop) = create_window(app_name, width, height);
+    let (window, event_loop) = create_window(app_name, width, height)?;
     let mut base_app = BaseApp::new(&window, app_name, enable_raytracing)?;
     let mut ui = A::Gui::new()?;
     let mut app = A::new(&mut base_app)?;
     let mut gui_context = GuiContext::new(
         &base_app.context,
-        &base_app.context.command_pool,
         base_app.swapchain.format,
         &window,
         IN_FLIGHT_FRAMES as _,
@@ -143,35 +143,64 @@ pub fn run<A: App + 'static>(
     let mut last_frame = Instant::now();
     let mut frame_stats = FrameStats::default();
 
-    event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Poll;
-
+    event_loop.run(move |event, elwt| {
         let app = &mut app; // Make sure it is dropped before base_app
 
-        gui_context.handle_event(&window, &event);
         controls = controls.handle_event(&event);
 
         match event {
             Event::NewEvents(_) => {
                 let now = Instant::now();
                 let frame_time = now - last_frame;
-                gui_context.update_delta_time(frame_time);
                 last_frame = now;
 
                 frame_stats.set_frame_time(frame_time);
 
                 controls = controls.reset();
             }
-            // On resize
-            Event::WindowEvent {
-                event: WindowEvent::Resized(..),
-                ..
-            } => {
-                log::debug!("Window has been resized");
-                is_swapchain_dirty = true;
+            Event::WindowEvent { event, .. } => {
+                gui_context.handle_event(&window, &event);
+
+                match event {
+                    // On resize
+                    WindowEvent::Resized(..) => {
+                        log::debug!("Window has been resized");
+                        is_swapchain_dirty = true;
+                    }
+                    // Keyboard
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                state,
+                                physical_key,
+                                ..
+                            },
+                        ..
+                    } => {
+                        if matches!(physical_key, PhysicalKey::Code(KeyCode::KeyR))
+                            && state == ElementState::Pressed
+                        {
+                            base_app.toggle_stats();
+                        }
+                    }
+                    // Mouse
+                    WindowEvent::MouseInput { state, button, .. } => {
+                        if button == MouseButton::Right {
+                            if state == ElementState::Pressed {
+                                window.set_cursor_visible(false);
+                            } else {
+                                window.set_cursor_visible(true);
+                            }
+                        }
+                    }
+                    // Exit app on request to close window
+                    WindowEvent::CloseRequested => elwt.exit(),
+                    _ => (),
+                }
             }
+
             // Draw
-            Event::MainEventsCleared => {
+            Event::AboutToWait => {
                 if is_swapchain_dirty {
                     let dim = window.inner_size();
                     if dim.width > 0 && dim.height > 0 {
@@ -191,54 +220,22 @@ pub fn run<A: App + 'static>(
                     .draw(&window, app, &mut gui_context, &mut ui, &mut frame_stats)
                     .expect("Failed to tick");
             }
-            // Keyboard
-            Event::WindowEvent {
-                event:
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                state,
-                                virtual_keycode: Some(key_code),
-                                ..
-                            },
-                        ..
-                    },
-                ..
-            } => {
-                if key_code == VirtualKeyCode::R && state == ElementState::Pressed {
-                    base_app.toggle_stats();
-                }
-            }
-            // Mouse
-            Event::WindowEvent {
-                event: WindowEvent::MouseInput { state, button, .. },
-                ..
-            } => {
-                if button == MouseButton::Right {
-                    if state == ElementState::Pressed {
-                        window.set_cursor_visible(false);
-                    } else {
-                        window.set_cursor_visible(true);
-                    }
-                }
-            }
-            // Exit app on request to close window
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                ..
-            } => *control_flow = ControlFlow::Exit,
+
             // Wait for gpu to finish pending work before closing app
-            Event::LoopDestroyed => base_app
+            Event::LoopExiting => base_app
                 .wait_for_gpu()
                 .expect("Failed to wait for gpu to finish work"),
             _ => (),
         }
-    });
+    })?;
+
+    Ok(())
 }
 
-fn create_window(app_name: &str, width: u32, height: u32) -> (Window, EventLoop<()>) {
+fn create_window(app_name: &str, width: u32, height: u32) -> Result<(Window, EventLoop<()>)> {
     log::debug!("Creating window and event loop");
-    let events_loop = EventLoop::new();
+    let events_loop = EventLoop::new()?;
+    events_loop.set_control_flow(ControlFlow::Poll);
     let window = WindowBuilder::new()
         .with_title(app_name)
         .with_inner_size(PhysicalSize::new(width, height))
@@ -246,7 +243,7 @@ fn create_window(app_name: &str, width: u32, height: u32) -> (Window, EventLoop<
         .build(&events_loop)
         .unwrap();
 
-    (window, events_loop)
+    Ok((window, events_loop))
 }
 
 impl<B: App> BaseApp<B> {
@@ -387,17 +384,42 @@ impl<B: App> BaseApp<B> {
         };
         self.in_flight_frames.fence().reset()?;
 
-        // Generate UI
-        gui_context
-            .platform
-            .prepare_frame(gui_context.imgui.io_mut(), window)?;
-        let ui = gui_context.imgui.frame();
+        // UI
+        if !self.in_flight_frames.gui_textures_to_free().is_empty() {
+            gui_context.free_textures(self.in_flight_frames.gui_textures_to_free())?;
+        }
 
-        gui.build(&ui);
-        self.build_perf_ui(&ui, frame_stats);
+        let raw_input = gui_context.take_input(window);
 
-        gui_context.platform.prepare_render(&ui, window);
-        let draw_data = gui_context.imgui.render();
+        let FullOutput {
+            platform_output,
+            textures_delta,
+            shapes,
+            pixels_per_point,
+            ..
+        } = gui_context.run(raw_input, |ctx| {
+            gui.build(ctx);
+            self.build_perf_ui(ctx, frame_stats);
+        });
+
+        gui_context.handle_platform_output(window, platform_output);
+
+        if !textures_delta.free.is_empty() {
+            self.in_flight_frames
+                .set_gui_textures_to_free(textures_delta.free);
+        }
+
+        if !textures_delta.set.is_empty() {
+            gui_context
+                .set_textures(
+                    self.context.graphics_queue.inner,
+                    self.context.command_pool.inner,
+                    textures_delta.set.as_slice(),
+                )
+                .expect("Failed to update texture");
+        }
+
+        let primitives = gui_context.tessellate(shapes, pixels_per_point);
 
         base_app.update(self, gui, image_index, frame_stats.frame_time)?;
 
@@ -408,7 +430,8 @@ impl<B: App> BaseApp<B> {
             image_index,
             base_app,
             &mut gui_context.renderer,
-            draw_data,
+            pixels_per_point,
+            &primitives,
         )?;
 
         self.context.graphics_queue.submit(
@@ -442,58 +465,35 @@ impl<B: App> BaseApp<B> {
         Ok(false)
     }
 
-    fn build_perf_ui(&self, ui: &Ui, frame_stats: &mut FrameStats) {
-        let width = self.swapchain.extent.width as f32;
-        let height = self.swapchain.extent.height as f32;
-
+    fn build_perf_ui(&self, ctx: &gui::egui::Context, frame_stats: &mut FrameStats) {
         if matches!(
             self.stats_display_mode,
             StatsDisplayMode::Basic | StatsDisplayMode::Full
         ) {
-            ui.window("Frame stats")
-                .focus_on_appearing(false)
-                .no_decoration()
-                .bg_alpha(0.5)
-                .position([width - 165.0, 5.0], gui::imgui::Condition::Always)
-                .size([160.0, 140.0], gui::imgui::Condition::FirstUseEver)
-                .build(|| {
-                    ui.text("Framerate");
-                    ui.label_text("fps", frame_stats.fps_counter.to_string());
-                    ui.text("Frametimes");
-                    ui.label_text("all", format!("{:?}", frame_stats.frame_time));
-                    ui.label_text("cpu", format!("{:?}", frame_stats.cpu_time));
-                    ui.label_text("gpu", format!("{:?}", frame_stats.gpu_time));
+            egui::Window::new("Frame stats")
+                .anchor(Align2::RIGHT_TOP, [-5.0, 5.0])
+                .collapsible(false)
+                .interactable(false)
+                .resizable(false)
+                .drag_to_scroll(false)
+                .show(ctx, |ui| {
+                    ui.label("Framerate");
+                    ui.label(format!("{} fps", frame_stats.fps_counter));
+                    ui.label("Frametimes");
+                    ui.label(format!("all - {:?}", frame_stats.frame_time));
+                    ui.label(format!("cpu - {:?}", frame_stats.cpu_time));
+                    ui.label(format!("gpu - {:?}", frame_stats.gpu_time));
                 });
         }
 
         if matches!(self.stats_display_mode, StatsDisplayMode::Full) {
-            let graph_size = [width - 80.0, 40.0];
-            const SCALE_MIN: f32 = 0.0;
-            const SCALE_MAX: f32 = 17.0;
-
-            ui.window("Frametime graphs")
-                .focus_on_appearing(false)
-                .no_decoration()
-                .bg_alpha(0.5)
-                .position([5.0, height - 145.0], gui::imgui::Condition::Always)
-                .size([width - 10.0, 140.0], gui::imgui::Condition::Always)
-                .build(|| {
-                    ui.plot_lines("Frame", &frame_stats.frame_time_ms_log.0)
-                        .scale_min(SCALE_MIN)
-                        .scale_max(SCALE_MAX)
-                        .graph_size(graph_size)
-                        .build();
-                    ui.plot_lines("CPU", &frame_stats.cpu_time_ms_log.0)
-                        .scale_min(SCALE_MIN)
-                        .scale_max(SCALE_MAX)
-                        .graph_size(graph_size)
-                        .build();
-                    ui.plot_lines("GPU", &frame_stats.gpu_time_ms_log.0)
-                        .scale_min(SCALE_MIN)
-                        .scale_max(SCALE_MAX)
-                        .graph_size(graph_size)
-                        .build();
-                });
+            egui::TopBottomPanel::bottom("frametime_graphs").show(ctx, |ui| {
+                build_frametime_plot(ui, "Frames", &frame_stats.frame_time_ms_log.0);
+                ui.add_space(5.0);
+                build_frametime_plot(ui, "CPU", &frame_stats.cpu_time_ms_log.0);
+                ui.add_space(5.0);
+                build_frametime_plot(ui, "GPU", &frame_stats.gpu_time_ms_log.0);
+            });
         }
     }
 
@@ -503,7 +503,8 @@ impl<B: App> BaseApp<B> {
         image_index: usize,
         base_app: &B,
         gui_renderer: &mut Renderer,
-        draw_data: &DrawData,
+        pixels_per_point: f32,
+        primitives: &[ClippedPrimitive],
     ) -> Result<()> {
         let swapchain_image = &self.swapchain.images[image_index];
         let swapchain_image_view = &self.swapchain.views[image_index];
@@ -598,7 +599,12 @@ impl<B: App> BaseApp<B> {
             None,
         );
 
-        gui_renderer.cmd_draw(buffer.inner, draw_data)?;
+        gui_renderer.cmd_draw(
+            buffer.inner,
+            self.swapchain.extent,
+            pixels_per_point,
+            primitives,
+        )?;
 
         buffer.end_rendering();
 
@@ -684,6 +690,7 @@ struct PerFrame {
     render_finished_semaphore: Semaphore,
     fence: Fence,
     timing_query_pool: TimestampQueryPool<2>,
+    gui_textures_to_free: Vec<TextureId>,
 }
 
 impl InFlightFrames {
@@ -695,12 +702,14 @@ impl InFlightFrames {
                 let fence = context.create_fence(Some(vk::FenceCreateFlags::SIGNALED))?;
 
                 let timing_query_pool = context.create_timestamp_query_pool()?;
+                let gui_textures_to_free = Vec::new();
 
                 Ok(PerFrame {
                     image_available_semaphore,
                     render_finished_semaphore,
                     fence,
                     timing_query_pool,
+                    gui_textures_to_free,
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -729,6 +738,14 @@ impl InFlightFrames {
 
     fn timing_query_pool(&self) -> &TimestampQueryPool<2> {
         &self.per_frames[self.current_frame].timing_query_pool
+    }
+
+    fn gui_textures_to_free(&self) -> &[TextureId] {
+        &self.per_frames[self.current_frame].gui_textures_to_free
+    }
+
+    fn set_gui_textures_to_free(&mut self, ids: Vec<TextureId>) {
+        self.per_frames[self.current_frame].gui_textures_to_free = ids;
     }
 
     fn gpu_frame_time_ms(&self) -> Result<Duration> {
@@ -825,4 +842,25 @@ impl<T> Queue<T> {
         }
         self.0.push(value);
     }
+}
+
+fn build_frametime_plot(ui: &mut egui::Ui, id: impl std::hash::Hash, points: &[f32]) {
+    let points: egui_plot::PlotPoints = points
+        .iter()
+        .enumerate()
+        .map(|(i, v)| [i as f64, *v as f64])
+        .collect();
+
+    egui_plot::Plot::new(id)
+        // .width(width)
+        .height(80.0)
+        .allow_boxed_zoom(false)
+        .allow_double_click_reset(false)
+        .allow_drag(false)
+        .allow_scroll(false)
+        .allow_zoom(false)
+        .show_axes([false, true])
+        .show(ui, |plot| {
+            plot.line(egui_plot::Line::new(points));
+        });
 }

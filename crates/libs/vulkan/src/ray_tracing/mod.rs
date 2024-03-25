@@ -23,6 +23,9 @@ pub struct RayTracingContext {
     pub acceleration_structure_fn: AshAccelerationStructure,
 }
 
+unsafe impl Send for RayTracingContext {}
+unsafe impl Sync for RayTracingContext {}
+
 impl RayTracingContext {
     pub(crate) fn new(instance: &Instance, pdevice: &PhysicalDevice, device: &Device) -> Self {
         let pipeline_properties =
