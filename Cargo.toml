@@ -36,7 +36,7 @@ ash-window = "0.12"
 raw-window-handle = "0.5"
 gpu-allocator = { version = "0.25", default-features = false, features = ["vulkan"] }
 
-egui = "0.26"
-egui_plot = "0.26"
-egui-winit = "0.26"
-egui-ash-renderer = { version = "0.1.0", features = ["gpu-allocator", "dynamic-rendering"]}
+egui = "0.27"
+egui_plot = "0.27"
+egui-winit = "0.27"
+egui-ash-renderer = { version = "0.2.0", features = ["gpu-allocator", "dynamic-rendering"]}
