@@ -20,6 +20,7 @@ impl Device {
         queue_families: &[QueueFamily],
         required_extensions: &[&str],
         device_features: &DeviceFeatures,
+        enable_ray_tracing: bool,
     ) -> Result<Self> {
         let queue_priorities = [1.0f32];
 
@@ -61,10 +62,14 @@ impl Device {
 
         let mut features = vk::PhysicalDeviceFeatures2::builder()
             .features(vk::PhysicalDeviceFeatures::default())
-            .push_next(&mut acceleration_struct_feature)
-            .push_next(&mut ray_tracing_feature)
             .push_next(&mut vulkan_12_features)
             .push_next(&mut vulkan_13_features);
+
+        if enable_ray_tracing {
+            features = features
+                .push_next(&mut acceleration_struct_feature)
+                .push_next(&mut ray_tracing_feature);
+        }
 
         let device_create_info = vk::DeviceCreateInfo::builder()
             .queue_create_infos(&queue_create_infos)
