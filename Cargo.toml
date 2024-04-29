@@ -19,7 +19,7 @@ rust-version = "1.77"
 
 [workspace.dependencies]
 log = "0.4"
-simple_logger = "4.0"
+simplelog = "0.12"
 thiserror = "1.0"
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }

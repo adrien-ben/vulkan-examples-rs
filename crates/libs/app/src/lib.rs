@@ -14,8 +14,8 @@ use gui::{
     egui::{self, Align2, ClippedPrimitive, FullOutput, TextureId},
     GuiContext,
 };
-use simple_logger::SimpleLogger;
 use std::{
+    fs::OpenOptions,
     marker::PhantomData,
     time::{Duration, Instant},
 };
@@ -154,7 +154,9 @@ pub fn run<A: App + 'static>(
     height: u32,
     app_config: AppConfig,
 ) -> Result<()> {
-    SimpleLogger::default().env().init()?;
+    let log_to_file = std::env::args().any(|a| "--log-to-file" == a);
+    
+    setup_logs(app_name, log_to_file);
 
     let (window, event_loop) = create_window(app_name, width, height)?;
     let mut base_app = BaseApp::new(&window, app_name, app_config)?;
@@ -255,6 +257,33 @@ pub fn run<A: App + 'static>(
     })?;
 
     Ok(())
+}
+
+fn setup_logs(app_name: &str, log_to_file: bool) {
+    use simplelog::*;
+
+    const LEVEL: log::LevelFilter = log::LevelFilter::Debug;
+
+    let mut loggers: Vec<Box<dyn SharedLogger>> = vec![TermLogger::new(
+        LEVEL,
+        Config::default(),
+        TerminalMode::Mixed,
+        ColorChoice::Auto,
+    )];
+    if log_to_file {
+        loggers.push(WriteLogger::new(
+            LEVEL,
+            Config::default(),
+            OpenOptions::new()
+                .create(true)
+                .truncate(true)
+                .write(true)
+                .open(format!("{app_name}.log"))
+                .expect("log file"),
+        ));
+    }
+
+    CombinedLogger::init(loggers).expect("logger");
 }
 
 fn create_window(app_name: &str, width: u32, height: u32) -> Result<(Window, EventLoop<()>)> {

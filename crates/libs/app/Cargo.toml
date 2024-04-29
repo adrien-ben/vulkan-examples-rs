@@ -8,7 +8,7 @@ authors.workspace = true
 
 [dependencies]
 log.workspace = true
-simple_logger.workspace = true
+simplelog.workspace = true
 anyhow.workspace = true
 winit.workspace = true
 glam.workspace = true
