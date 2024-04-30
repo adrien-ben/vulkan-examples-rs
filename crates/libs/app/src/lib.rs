@@ -155,7 +155,7 @@ pub fn run<A: App + 'static>(
     app_config: AppConfig,
 ) -> Result<()> {
     let log_to_file = std::env::args().any(|a| "--log-to-file" == a);
-    
+
     setup_logs(app_name, log_to_file);
 
     let (window, event_loop) = create_window(app_name, width, height)?;
@@ -410,14 +410,15 @@ impl<B: App> BaseApp<B> {
             .update(&self.context, width, height, format)?;
 
         // Recreate storage image for RT and update descriptor set
-        let storage_images = create_storage_images(
-            &mut self.context,
-            self.swapchain.format,
-            self.swapchain.extent,
-            self.swapchain.images.len(),
-        )?;
-
-        let _ = std::mem::replace(&mut self.storage_images, storage_images);
+        if self.raytracing_enabled {
+            let storage_images = create_storage_images(
+                &mut self.context,
+                self.swapchain.format,
+                self.swapchain.extent,
+                self.swapchain.images.len(),
+            )?;
+            let _ = std::mem::replace(&mut self.storage_images, storage_images);
+        }
 
         // Update camera aspect ration
         self.camera.aspect_ratio = width as f32 / height as f32;
@@ -603,9 +604,9 @@ impl<B: App> BaseApp<B> {
                     image: &self.swapchain.images[image_index],
                     old_layout: vk::ImageLayout::UNDEFINED,
                     new_layout: vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                    src_access_mask: vk::AccessFlags2::NONE,
+                    src_access_mask: vk::AccessFlags2::empty(),
                     dst_access_mask: vk::AccessFlags2::TRANSFER_WRITE,
-                    src_stage_mask: vk::PipelineStageFlags2::NONE,
+                    src_stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
                     dst_stage_mask: vk::PipelineStageFlags2::TRANSFER,
                 },
                 ImageBarrier {
@@ -641,21 +642,19 @@ impl<B: App> BaseApp<B> {
                     old_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
                     new_layout: vk::ImageLayout::GENERAL,
                     src_access_mask: vk::AccessFlags2::TRANSFER_READ,
-                    dst_access_mask: vk::AccessFlags2::NONE,
+                    dst_access_mask: vk::AccessFlags2::SHADER_WRITE,
                     src_stage_mask: vk::PipelineStageFlags2::TRANSFER,
-                    dst_stage_mask: vk::PipelineStageFlags2::ALL_COMMANDS,
+                    dst_stage_mask: vk::PipelineStageFlags2::RAY_TRACING_SHADER_KHR,
                 },
             ]);
-        }
-
-        if !self.raytracing_enabled {
+        } else {
             self.command_buffers[image_index].pipeline_image_barriers(&[ImageBarrier {
                 image: &self.swapchain.images[image_index],
                 old_layout: vk::ImageLayout::UNDEFINED,
                 new_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-                src_access_mask: vk::AccessFlags2::NONE,
+                src_access_mask: vk::AccessFlags2::empty(),
                 dst_access_mask: vk::AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                src_stage_mask: vk::PipelineStageFlags2::NONE,
+                src_stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
                 dst_stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
             }]);
         }
@@ -688,13 +687,13 @@ impl<B: App> BaseApp<B> {
             old_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             new_layout: vk::ImageLayout::PRESENT_SRC_KHR,
             src_access_mask: vk::AccessFlags2::COLOR_ATTACHMENT_WRITE,
-            dst_access_mask: vk::AccessFlags2::COLOR_ATTACHMENT_READ,
+            dst_access_mask: vk::AccessFlags2::empty(),
             src_stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
             dst_stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
         }]);
 
         self.command_buffers[image_index].write_timestamp(
-            vk::PipelineStageFlags2::ALL_COMMANDS,
+            vk::PipelineStageFlags2::TOP_OF_PIPE,
             self.in_flight_frames.timing_query_pool(),
             1,
         );
@@ -734,9 +733,9 @@ fn create_storage_images(
                 old_layout: vk::ImageLayout::UNDEFINED,
                 new_layout: vk::ImageLayout::GENERAL,
                 src_access_mask: vk::AccessFlags2::NONE,
-                dst_access_mask: vk::AccessFlags2::NONE,
+                dst_access_mask: vk::AccessFlags2::SHADER_WRITE,
                 src_stage_mask: vk::PipelineStageFlags2::NONE,
-                dst_stage_mask: vk::PipelineStageFlags2::ALL_COMMANDS,
+                dst_stage_mask: vk::PipelineStageFlags2::RAY_TRACING_SHADER_KHR,
             }]);
         })?;
 
