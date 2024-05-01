@@ -41,7 +41,6 @@ fn main() -> Result<()> {
         HEIGHT,
         AppConfig {
             required_instance_extensions: &["VK_EXT_swapchain_colorspace"],
-            skip_drawing_ui: true,
             ..Default::default()
         },
     )
@@ -66,11 +65,6 @@ struct Skybox {
 
     calibration_pass_ubo: Buffer,
     calibration_pass: Pass,
-
-    hdr_framebuffer: Texture,
-    ui_framebuffer: Texture,
-
-    final_pass: Pass,
 }
 
 impl App for Skybox {
@@ -127,22 +121,6 @@ impl App for Skybox {
         let calibration_pass =
             create_calibration_pass(context, &calibration_pass_ubo, HDR_FRAMEBUFFER_FORMAT)?;
 
-        // hdr framebuffer for the tonemap or calibration pass
-        let hdr_framebuffer =
-            Texture::framebuffer(context, base.swapchain.extent, HDR_FRAMEBUFFER_FORMAT)?;
-
-        // ui
-        let ui_framebuffer =
-            Texture::framebuffer(context, base.swapchain.extent, vk::Format::R8G8B8A8_SRGB)?;
-
-        // final pass
-        let final_pass = create_final_pass(
-            context,
-            &hdr_framebuffer,
-            &ui_framebuffer,
-            base.swapchain.format,
-        )?;
-
         Ok(Self {
             hdr_enabled: false,
             app_mode: AppMode::Scene,
@@ -162,11 +140,6 @@ impl App for Skybox {
 
             calibration_pass_ubo,
             calibration_pass,
-
-            hdr_framebuffer,
-            ui_framebuffer,
-
-            final_pass,
         })
     }
 
@@ -174,15 +147,6 @@ impl App for Skybox {
         // rebuilt framebuffers
         self.skybox_pass_framebuffer =
             Texture::framebuffer(&base.context, base.swapchain.extent, HDR_FRAMEBUFFER_FORMAT)?;
-
-        self.hdr_framebuffer =
-            Texture::framebuffer(&base.context, base.swapchain.extent, HDR_FRAMEBUFFER_FORMAT)?;
-
-        self.ui_framebuffer = Texture::framebuffer(
-            &base.context,
-            base.swapchain.extent,
-            vk::Format::R8G8B8A8_SRGB,
-        )?;
 
         // update descriptors sets
         self.tonemap_pass
@@ -195,25 +159,6 @@ impl App for Skybox {
                     layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                 },
             }]);
-
-        self.final_pass.descriptor_set.update(&[
-            WriteDescriptorSet {
-                binding: 0,
-                kind: WriteDescriptorSetKind::CombinedImageSampler {
-                    view: &self.hdr_framebuffer.view,
-                    sampler: &self.hdr_framebuffer.sampler,
-                    layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                },
-            },
-            WriteDescriptorSet {
-                binding: 1,
-                kind: WriteDescriptorSetKind::CombinedImageSampler {
-                    view: &self.ui_framebuffer.view,
-                    sampler: &self.ui_framebuffer.sampler,
-                    layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                },
-            },
-        ]);
 
         // rebuild pipelines
         let format = if self.hdr_enabled {
@@ -232,9 +177,6 @@ impl App for Skybox {
             &self.calibration_pass.pipeline_layout,
             format,
         )?;
-
-        self.final_pass.pipeline =
-            create_final_pass_pipeline(&base.context, &self.final_pass.pipeline_layout, format)?;
 
         Ok(())
     }
@@ -319,105 +261,27 @@ impl App for Skybox {
         Ok(())
     }
 
-    fn record_raster_commands_with_ui(
-        &self,
-        base: &mut BaseApp<Self>,
-        image_index: usize,
-        ui_pixels_per_point: f32,
-        ui_primitives: &[egui::ClippedPrimitive],
-    ) -> Result<()> {
-        base.command_buffers[image_index].pipeline_image_barriers(&[
-            ImageBarrier {
-                image: &self.hdr_framebuffer.image,
-                old_layout: vk::ImageLayout::UNDEFINED,
-                new_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-                src_access_mask: vk::AccessFlags2::SHADER_READ,
-                dst_access_mask: vk::AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                src_stage_mask: vk::PipelineStageFlags2::FRAGMENT_SHADER,
-                dst_stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-            },
-            ImageBarrier {
-                image: &self.ui_framebuffer.image,
-                old_layout: vk::ImageLayout::UNDEFINED,
-                new_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-                src_access_mask: vk::AccessFlags2::SHADER_READ,
-                dst_access_mask: vk::AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                src_stage_mask: vk::PipelineStageFlags2::FRAGMENT_SHADER,
-                dst_stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-            },
-        ]);
+    fn record_raster_commands(&self, base: &BaseApp<Self>, image_index: usize) -> Result<()> {
+        match self.app_mode {
+            AppMode::Scene => {
+                // skybox pass outputs to an hdr framebuffer the used for tonemapping
+                self.cmd_skybox_pass(&base.command_buffers[image_index]);
 
-        if self.hdr_enabled {
-            match self.app_mode {
-                AppMode::Scene => {
-                    // skybox pass outputs to an hdr framebuffer the used for tonemapping
-                    self.cmd_skybox_pass(&base.command_buffers[image_index]);
-
-                    // tonemap pass outputs to hdr framebuffer
-                    self.cmd_tonemap_pass(
-                        &base.command_buffers[image_index],
-                        &self.hdr_framebuffer.view,
-                        self.hdr_framebuffer.image.extent2d(),
-                    );
-                }
-                AppMode::Calibration(_) => {
-                    // calibration pass outputs to hdr framebuffer
-                    self.cmd_calibration_pass(
-                        &base.command_buffers[image_index],
-                        &self.hdr_framebuffer.view,
-                        self.hdr_framebuffer.image.extent2d(),
-                    );
-                }
+                // tonemap pass outputs to hdr framebuffer
+                self.cmd_tonemap_pass(
+                    &base.command_buffers[image_index],
+                    &base.swapchain.views[image_index],
+                    base.swapchain.extent,
+                );
             }
-
-            // ui outputs to an sdr framebuffer
-            let extent = self.ui_framebuffer.image.extent2d();
-            base.command_buffers[image_index].begin_rendering(
-                &self.ui_framebuffer.view,
-                extent,
-                vk::AttachmentLoadOp::CLEAR,
-                Some([0.0, 0.0, 0.0, 0.0]),
-            );
-            base.gui_context.renderer.cmd_draw(
-                base.command_buffers[image_index].inner,
-                extent,
-                ui_pixels_per_point,
-                ui_primitives,
-            )?;
-            base.command_buffers[image_index].end_rendering();
-
-            // final pass "manually" blends sdr ui with hdr scene/calibration framebuffer
-            self.cmd_final_pass(
-                &base.command_buffers[image_index],
-                &base.swapchain.views[image_index],
-                base.swapchain.extent,
-            );
-        } else {
-            // skybox pass outputs to an hdr framebuffer the used for tonemapping
-            self.cmd_skybox_pass(&base.command_buffers[image_index]);
-
-            // tonemap pass outputs to swapchain
-            self.cmd_tonemap_pass(
-                &base.command_buffers[image_index],
-                &base.swapchain.views[image_index],
-                base.swapchain.extent,
-            );
-
-            // ui outputs to swapchain
-            let extent = base.swapchain.extent;
-            base.command_buffers[image_index].begin_rendering(
-                &base.swapchain.views[image_index],
-                extent,
-                vk::AttachmentLoadOp::DONT_CARE,
-                None,
-            );
-            base.gui_context.renderer.cmd_draw(
-                base.command_buffers[image_index].inner,
-                extent,
-                ui_pixels_per_point,
-                ui_primitives,
-            )?;
-            base.command_buffers[image_index].end_rendering();
+            AppMode::Calibration(_) => {
+                // calibration pass outputs to hdr framebuffer
+                self.cmd_calibration_pass(
+                    &base.command_buffers[image_index],
+                    &base.swapchain.views[image_index],
+                    base.swapchain.extent,
+                );
+            }
         }
 
         Ok(())
@@ -478,36 +342,6 @@ impl Skybox {
         target_extent: vk::Extent2D,
     ) {
         self.cmd_fullscreen_pass(buffer, &self.calibration_pass, target_view, target_extent);
-    }
-
-    fn cmd_final_pass(
-        &self,
-        buffer: &CommandBuffer,
-        target_view: &ImageView,
-        target_extent: vk::Extent2D,
-    ) {
-        buffer.pipeline_image_barriers(&[
-            ImageBarrier {
-                image: &self.hdr_framebuffer.image,
-                old_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-                new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                src_access_mask: vk::AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                dst_access_mask: vk::AccessFlags2::SHADER_READ,
-                src_stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                dst_stage_mask: vk::PipelineStageFlags2::FRAGMENT_SHADER,
-            },
-            ImageBarrier {
-                image: &self.ui_framebuffer.image,
-                old_layout: vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-                new_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                src_access_mask: vk::AccessFlags2::COLOR_ATTACHMENT_WRITE,
-                dst_access_mask: vk::AccessFlags2::SHADER_READ,
-                src_stage_mask: vk::PipelineStageFlags2::COLOR_ATTACHMENT_OUTPUT,
-                dst_stage_mask: vk::PipelineStageFlags2::FRAGMENT_SHADER,
-            },
-        ]);
-
-        self.cmd_fullscreen_pass(buffer, &self.final_pass, target_view, target_extent);
     }
 
     fn cmd_fullscreen_pass(
@@ -1154,97 +988,6 @@ fn create_calibration_pass_pipeline(
                 },
                 GraphicsShaderCreateInfo {
                     source: &include_bytes!("../shaders/calibration.frag.spv")[..],
-                    stage: vk::ShaderStageFlags::FRAGMENT,
-                },
-            ],
-            primitive_topology: vk::PrimitiveTopology::TRIANGLE_LIST,
-            extent: None,
-            color_attachment_format,
-            color_attachment_blend: None,
-            dynamic_states: Some(&[vk::DynamicState::SCISSOR, vk::DynamicState::VIEWPORT]),
-        },
-    )?;
-
-    Ok(pipeline)
-}
-
-fn create_final_pass(
-    context: &Context,
-    hdr_framebuffer: &Texture,
-    ui_framebuffer: &Texture,
-    color_attachment_format: vk::Format,
-) -> Result<Pass> {
-    let bindings = [
-        vk::DescriptorSetLayoutBinding::builder()
-            .binding(0)
-            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
-            .build(),
-        vk::DescriptorSetLayoutBinding::builder()
-            .binding(1)
-            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
-            .build(),
-    ];
-    let dsl = context.create_descriptor_set_layout(&bindings)?;
-
-    let pool_sizes = [vk::DescriptorPoolSize::builder()
-        .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-        .descriptor_count(2)
-        .build()];
-
-    let descriptor_pool = context.create_descriptor_pool(1, &pool_sizes)?;
-    let descriptor_set = descriptor_pool.allocate_set(&dsl)?;
-
-    descriptor_set.update(&[
-        WriteDescriptorSet {
-            binding: 0,
-            kind: WriteDescriptorSetKind::CombinedImageSampler {
-                view: &hdr_framebuffer.view,
-                sampler: &hdr_framebuffer.sampler,
-                layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            },
-        },
-        WriteDescriptorSet {
-            binding: 1,
-            kind: WriteDescriptorSetKind::CombinedImageSampler {
-                view: &ui_framebuffer.view,
-                sampler: &ui_framebuffer.sampler,
-                layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-            },
-        },
-    ]);
-
-    let pipeline_layout = context.create_pipeline_layout(&[&dsl])?;
-
-    let pipeline = create_final_pass_pipeline(context, &pipeline_layout, color_attachment_format)?;
-
-    Ok(Pass {
-        _dsl: dsl,
-        _descriptor_pool: descriptor_pool,
-        descriptor_set,
-        pipeline_layout,
-        pipeline,
-    })
-}
-
-fn create_final_pass_pipeline(
-    context: &Context,
-    layout: &PipelineLayout,
-    color_attachment_format: vk::Format,
-) -> Result<GraphicsPipeline> {
-    let pipeline = context.create_graphics_pipeline::<QuadVertex>(
-        layout,
-        GraphicsPipelineCreateInfo {
-            shaders: &[
-                GraphicsShaderCreateInfo {
-                    source: &include_bytes!("../shaders/fullscreen.vert.spv")[..],
-                    stage: vk::ShaderStageFlags::VERTEX,
-                },
-                GraphicsShaderCreateInfo {
-                    source: &include_bytes!("../shaders/final.frag.spv")[..],
                     stage: vk::ShaderStageFlags::FRAGMENT,
                 },
             ],

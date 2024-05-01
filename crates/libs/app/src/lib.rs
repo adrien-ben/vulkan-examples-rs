@@ -42,7 +42,6 @@ pub struct BaseApp<B: App> {
     stats_display_mode: StatsDisplayMode,
 
     pub gui_context: GuiContext,
-    skip_drawing_ui: bool,
 
     pub context: Context, // make sure it's dropped last
 
@@ -53,7 +52,6 @@ pub struct BaseApp<B: App> {
 pub struct AppConfig<'a, 'b> {
     pub enable_raytracing: bool,
     pub required_instance_extensions: &'a [&'b str],
-    pub skip_drawing_ui: bool,
 }
 
 pub trait App: Sized {
@@ -87,25 +85,6 @@ pub trait App: Sized {
         // prevents reports of unused parameters without needing to use #[allow]
         let _ = base;
         let _ = image_index;
-
-        Ok(())
-    }
-
-    /// Same as [`App::record_raster_commands`] but with ui related data
-    ///
-    /// Useful if the user wants to bypass the default ui rendering (see [`AppConfig::skip_drawing_ui`])
-    fn record_raster_commands_with_ui(
-        &self,
-        base: &mut BaseApp<Self>,
-        image_index: usize,
-        ui_pixels_per_point: f32,
-        ui_primitives: &[ClippedPrimitive],
-    ) -> Result<()> {
-        // prevents reports of unused parameters without needing to use #[allow]
-        let _ = base;
-        let _ = image_index;
-        let _ = ui_pixels_per_point;
-        let _ = ui_primitives;
 
         Ok(())
     }
@@ -306,7 +285,6 @@ impl<B: App> BaseApp<B> {
         let AppConfig {
             enable_raytracing,
             required_instance_extensions,
-            skip_drawing_ui,
         } = app_config;
 
         // Vulkan context
@@ -369,7 +347,6 @@ impl<B: App> BaseApp<B> {
         Ok(Self {
             phantom: PhantomData,
             raytracing_enabled: enable_raytracing,
-            skip_drawing_ui,
             context,
             command_pool,
             swapchain,
@@ -410,6 +387,11 @@ impl<B: App> BaseApp<B> {
                 self.swapchain.images.len(),
             )?;
             let _ = std::mem::replace(&mut self.storage_images, storage_images);
+        }
+
+        // Update ui renderer
+        if let Some(format) = format {
+            self.gui_context.update_framebuffer_params(format.format)?;
         }
 
         // Update camera aspect ration
@@ -653,26 +635,23 @@ impl<B: App> BaseApp<B> {
 
         // Rasterization
         base_app.record_raster_commands(self, image_index)?;
-        base_app.record_raster_commands_with_ui(self, image_index, pixels_per_point, primitives)?;
 
         // UI
-        if !self.skip_drawing_ui {
-            self.command_buffers[image_index].begin_rendering(
-                &self.swapchain.views[image_index],
-                self.swapchain.extent,
-                vk::AttachmentLoadOp::DONT_CARE,
-                None,
-            );
+        self.command_buffers[image_index].begin_rendering(
+            &self.swapchain.views[image_index],
+            self.swapchain.extent,
+            vk::AttachmentLoadOp::DONT_CARE,
+            None,
+        );
 
-            self.gui_context.renderer.cmd_draw(
-                self.command_buffers[image_index].inner,
-                self.swapchain.extent,
-                pixels_per_point,
-                primitives,
-            )?;
+        self.gui_context.renderer.cmd_draw(
+            self.command_buffers[image_index].inner,
+            self.swapchain.extent,
+            pixels_per_point,
+            primitives,
+        )?;
 
-            self.command_buffers[image_index].end_rendering();
-        }
+        self.command_buffers[image_index].end_rendering();
 
         self.command_buffers[image_index].pipeline_image_barriers(&[ImageBarrier {
             image: &self.swapchain.images[image_index],

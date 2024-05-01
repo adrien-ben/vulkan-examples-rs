@@ -105,4 +105,13 @@ impl GuiContext {
 
         Ok(())
     }
+
+    pub fn update_framebuffer_params(&mut self, format: vk::Format) -> Result<()> {
+        self.renderer.set_dynamic_rendering(DynamicRendering {
+            color_attachment_format: format,
+            depth_attachment_format: None,
+        })?;
+
+        Ok(())
+    }
 }

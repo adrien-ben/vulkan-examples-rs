@@ -7,7 +7,7 @@ IN PROGRESS: I update this example as I learn more about HDR displays and how to
 ## Controls
 
 - Right Click + move mouse to rotate the camera
-- Use the UI controls to toggle HDR, load aother HDR image, change tone mapping or switch to calibration mode
+- Use the UI controls to toggle HDR, load another HDR image, change tone mapping or switch to calibration mode
 
 ## Rendering
 
@@ -26,7 +26,6 @@ The skybox pass is simple and just renders a 3D skybox from an equirectangular H
 ### Tonemapping
 
 This pass takes the skybox framebuffer as input and applies a user selected tone mapping filter to it.
-The output is another RGBA16_SFLOAT framebuffer when HDR is enabled or the swapchain otherwise.
 
 > For now you can apply either no mapping or a simple ACES filter from [2] (or [3] in SDR). The goal is to add more at some point.
 At least one taking advantage of the calibration values.
@@ -39,13 +38,6 @@ the user must match to find its display's minimum and maximum brightness.
 [1] explains how to map rgb white values to brightness values in nits.
 
 > Calibration mode is only available when HDR is active.
-
-### UI 
-
-In HDR mode, UI is rendered to its own framebuffer (R8G8B8A8_SRGB) then blended with the HDR framebuffer in the
-fragment shader of a final pass. Gamma correcion is applied in shader during said pass.
-
-In SDR it is just renderer directly to the swapchain.
 
 ## Tests 
 
