@@ -53,7 +53,6 @@ pub struct BaseApp<B: App> {
 pub struct AppConfig<'a, 'b> {
     pub enable_raytracing: bool,
     pub required_instance_extensions: &'a [&'b str],
-    pub ui_framebuffer_format: Option<vk::Format>,
     pub skip_drawing_ui: bool,
 }
 
@@ -307,7 +306,6 @@ impl<B: App> BaseApp<B> {
         let AppConfig {
             enable_raytracing,
             required_instance_extensions,
-            ui_framebuffer_format,
             skip_drawing_ui,
         } = app_config;
 
@@ -370,8 +368,8 @@ impl<B: App> BaseApp<B> {
             10.0,
         );
 
-        let ui_format = ui_framebuffer_format.unwrap_or(swapchain.format);
-        let gui_context = GuiContext::new(&context, ui_format, window, IN_FLIGHT_FRAMES as _)?;
+        let gui_context =
+            GuiContext::new(&context, swapchain.format, window, IN_FLIGHT_FRAMES as _)?;
 
         Ok(Self {
             phantom: PhantomData,

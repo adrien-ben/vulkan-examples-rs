@@ -26,7 +26,7 @@ const MAX_NITS: f32 = 2000.0;
 const HDR_FRAMEBUFFER_FORMAT: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
 
 const SDR_SURFACE_FORMAT: vk::SurfaceFormatKHR = vk::SurfaceFormatKHR {
-    format: vk::Format::B8G8R8A8_UNORM,
+    format: vk::Format::R8G8B8A8_UNORM,
     color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
 };
 const HDR_SURFACE_FORMAT: vk::SurfaceFormatKHR = vk::SurfaceFormatKHR {
@@ -41,7 +41,6 @@ fn main() -> Result<()> {
         HEIGHT,
         AppConfig {
             required_instance_extensions: &["VK_EXT_swapchain_colorspace"],
-            ui_framebuffer_format: Some(vk::Format::B8G8R8A8_UNORM),
             skip_drawing_ui: true,
             ..Default::default()
         },
@@ -134,7 +133,7 @@ impl App for Skybox {
 
         // ui
         let ui_framebuffer =
-            Texture::framebuffer(context, base.swapchain.extent, vk::Format::B8G8R8A8_UNORM)?;
+            Texture::framebuffer(context, base.swapchain.extent, vk::Format::R8G8B8A8_UNORM)?;
 
         // final pass
         let final_pass = create_final_pass(
@@ -182,7 +181,7 @@ impl App for Skybox {
         self.ui_framebuffer = Texture::framebuffer(
             &base.context,
             base.swapchain.extent,
-            vk::Format::B8G8R8A8_UNORM,
+            vk::Format::R8G8B8A8_UNORM,
         )?;
 
         // update descriptors sets

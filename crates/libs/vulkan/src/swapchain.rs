@@ -31,20 +31,13 @@ impl Swapchain {
         // Swapchain format
         let formats = &context.supported_surface_formats;
 
-        let format = if formats.len() == 1 && formats[0].format == vk::Format::UNDEFINED {
-            vk::SurfaceFormatKHR {
-                format: vk::Format::B8G8R8A8_UNORM,
-                color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
-            }
-        } else {
-            *formats
-                .iter()
-                .find(|format| {
-                    format.format == vk::Format::B8G8R8A8_UNORM
-                        && format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR
-                })
-                .unwrap_or(&formats[0])
-        };
+        let format = *formats
+            .iter()
+            .find(|format| {
+                format.format == vk::Format::R8G8B8A8_UNORM
+                    && format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR
+            })
+            .unwrap_or(&formats[0]);
         log::debug!("Swapchain format: {format:?}");
 
         // Swapchain present mode
