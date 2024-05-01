@@ -38,6 +38,7 @@ impl GuiContext {
             },
             Options {
                 in_flight_frames,
+                srgb_framebuffer: true,
                 ..Default::default()
             },
         )?;

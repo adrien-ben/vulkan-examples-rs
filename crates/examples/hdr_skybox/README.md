@@ -42,7 +42,7 @@ the user must match to find its display's minimum and maximum brightness.
 
 ### UI 
 
-In HDR mode, UI is rendered to its own framebuffer (R8G8B8A8_UNORM) then blended with the HDR framebuffer in the
+In HDR mode, UI is rendered to its own framebuffer (R8G8B8A8_SRGB) then blended with the HDR framebuffer in the
 fragment shader of a final pass. Gamma correcion is applied in shader during said pass.
 
 In SDR it is just renderer directly to the swapchain.

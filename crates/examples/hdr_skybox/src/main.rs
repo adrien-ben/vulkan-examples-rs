@@ -26,7 +26,7 @@ const MAX_NITS: f32 = 2000.0;
 const HDR_FRAMEBUFFER_FORMAT: vk::Format = vk::Format::R16G16B16A16_SFLOAT;
 
 const SDR_SURFACE_FORMAT: vk::SurfaceFormatKHR = vk::SurfaceFormatKHR {
-    format: vk::Format::R8G8B8A8_UNORM,
+    format: vk::Format::R8G8B8A8_SRGB,
     color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
 };
 const HDR_SURFACE_FORMAT: vk::SurfaceFormatKHR = vk::SurfaceFormatKHR {
@@ -133,7 +133,7 @@ impl App for Skybox {
 
         // ui
         let ui_framebuffer =
-            Texture::framebuffer(context, base.swapchain.extent, vk::Format::R8G8B8A8_UNORM)?;
+            Texture::framebuffer(context, base.swapchain.extent, vk::Format::R8G8B8A8_SRGB)?;
 
         // final pass
         let final_pass = create_final_pass(
@@ -181,7 +181,7 @@ impl App for Skybox {
         self.ui_framebuffer = Texture::framebuffer(
             &base.context,
             base.swapchain.extent,
-            vk::Format::R8G8B8A8_UNORM,
+            vk::Format::R8G8B8A8_SRGB,
         )?;
 
         // update descriptors sets

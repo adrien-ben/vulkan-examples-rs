@@ -345,12 +345,7 @@ impl<B: App> BaseApp<B> {
         )?;
 
         let storage_images = if enable_raytracing {
-            create_storage_images(
-                &mut context,
-                swapchain.format,
-                swapchain.extent,
-                swapchain.images.len(),
-            )?
+            create_storage_images(&mut context, swapchain.extent, swapchain.images.len())?
         } else {
             vec![]
         };
@@ -411,7 +406,6 @@ impl<B: App> BaseApp<B> {
         if self.raytracing_enabled {
             let storage_images = create_storage_images(
                 &mut self.context,
-                self.swapchain.format,
                 self.swapchain.extent,
                 self.swapchain.images.len(),
             )?;
@@ -708,7 +702,6 @@ impl<B: App> BaseApp<B> {
 
 fn create_storage_images(
     context: &mut Context,
-    format: vk::Format,
     extent: vk::Extent2D,
     count: usize,
 ) -> Result<Vec<ImageAndView>> {
@@ -718,7 +711,7 @@ fn create_storage_images(
         let image = context.create_image(
             vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::STORAGE,
             MemoryLocation::GpuOnly,
-            format,
+            vk::Format::R8G8B8A8_UNORM,
             extent.width,
             extent.height,
         )?;

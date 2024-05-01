@@ -9,10 +9,8 @@ layout(location = 0) out vec4 finalColor;
 
 void main() {
     vec4 texColor = texture(hdrFramebuffer, oUV);
-
     vec4 uiColor = texture(uiSampler, oUV);
-    uiColor.rgb = pow(uiColor.rgb, vec3(2.2));
-
+    
     finalColor = vec4(
         uiColor.r + (1.0 - uiColor.a) * texColor.r,
         uiColor.g + (1.0 - uiColor.a) * texColor.g,

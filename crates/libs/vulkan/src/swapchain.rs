@@ -34,7 +34,7 @@ impl Swapchain {
         let format = *formats
             .iter()
             .find(|format| {
-                format.format == vk::Format::R8G8B8A8_UNORM
+                format.format == vk::Format::R8G8B8A8_SRGB
                     && format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR
             })
             .unwrap_or(&formats[0]);
