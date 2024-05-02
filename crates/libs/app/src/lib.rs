@@ -52,6 +52,7 @@ pub struct BaseApp<B: App> {
 pub struct AppConfig<'a, 'b> {
     pub enable_raytracing: bool,
     pub required_instance_extensions: &'a [&'b str],
+    pub enable_independent_blend: bool,
 }
 
 pub trait App: Sized {
@@ -167,7 +168,6 @@ pub fn run<A: App + 'static>(
                 match event {
                     // On resize
                     WindowEvent::Resized(..) => {
-                        log::debug!("Window has been resized");
                         is_swapchain_dirty = true;
                     }
                     // Keyboard
@@ -285,6 +285,7 @@ impl<B: App> BaseApp<B> {
         let AppConfig {
             enable_raytracing,
             required_instance_extensions,
+            enable_independent_blend,
         } = app_config;
 
         // Vulkan context
@@ -307,6 +308,7 @@ impl<B: App> BaseApp<B> {
                 buffer_device_address: enable_raytracing,
                 dynamic_rendering: true,
                 synchronization2: true,
+                independent_blend: enable_independent_blend,
             })
             .with_raytracing_context(enable_raytracing)
             .build()?;
@@ -638,11 +640,13 @@ impl<B: App> BaseApp<B> {
 
         // UI
         self.command_buffers[image_index].begin_rendering(
-            &self.swapchain.views[image_index],
+            &[RenderingAttachment {
+                view: &self.swapchain.views[image_index],
+                load_op: vk::AttachmentLoadOp::DONT_CARE,
+                clear_value: None,
+            }],
             None,
             self.swapchain.extent,
-            vk::AttachmentLoadOp::DONT_CARE,
-            None,
         );
 
         self.gui_context.renderer.cmd_draw(

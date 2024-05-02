@@ -48,6 +48,10 @@ impl Device {
             .map(|e| e.as_ptr())
             .collect::<Vec<_>>();
 
+        let features = vk::PhysicalDeviceFeatures {
+            independent_blend: device_features.independent_blend.into(),
+            ..Default::default()
+        };
         let mut ray_tracing_feature = vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::builder()
             .ray_tracing_pipeline(device_features.ray_tracing_pipeline);
         let mut acceleration_struct_feature =
@@ -61,7 +65,7 @@ impl Device {
             .synchronization2(device_features.synchronization2);
 
         let mut features = vk::PhysicalDeviceFeatures2::builder()
-            .features(vk::PhysicalDeviceFeatures::default())
+            .features(features)
             .push_next(&mut vulkan_12_features)
             .push_next(&mut vulkan_13_features);
 
@@ -107,6 +111,7 @@ pub struct DeviceFeatures {
     pub buffer_device_address: bool,
     pub dynamic_rendering: bool,
     pub synchronization2: bool,
+    pub independent_blend: bool,
 }
 
 impl DeviceFeatures {
@@ -117,5 +122,6 @@ impl DeviceFeatures {
             && (!requirements.buffer_device_address || self.buffer_device_address)
             && (!requirements.dynamic_rendering || self.dynamic_rendering)
             && (!requirements.synchronization2 || self.synchronization2)
+            && (!requirements.independent_blend || self.independent_blend)
     }
 }

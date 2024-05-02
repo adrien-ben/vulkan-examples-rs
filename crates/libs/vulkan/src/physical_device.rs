@@ -91,6 +91,7 @@ impl PhysicalDevice {
         unsafe { instance.get_physical_device_features2(inner, &mut features) };
 
         let supported_device_features = DeviceFeatures {
+            independent_blend: features.features.independent_blend == vk::TRUE,
             ray_tracing_pipeline: ray_tracing_feature.ray_tracing_pipeline == vk::TRUE,
             acceleration_structure: acceleration_struct_feature.acceleration_structure == vk::TRUE,
             runtime_descriptor_array: features12.runtime_descriptor_array == vk::TRUE,

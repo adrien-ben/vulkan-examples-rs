@@ -8,9 +8,10 @@ use app::vulkan::ash::vk::{self, PipelineBindPoint};
 use app::vulkan::gpu_allocator::MemoryLocation;
 use app::vulkan::utils::create_gpu_only_buffer_from_data;
 use app::vulkan::{
-    Buffer, CommandBuffer, Context, DescriptorPool, DescriptorSet, DescriptorSetLayout,
-    GraphicsPipeline, GraphicsPipelineCreateInfo, GraphicsShaderCreateInfo, Image, ImageBarrier,
-    ImageView, PipelineLayout, Sampler, Vertex, WriteDescriptorSet, WriteDescriptorSetKind,
+    Buffer, ColorAttachmentsInfo, CommandBuffer, Context, DescriptorPool, DescriptorSet,
+    DescriptorSetLayout, GraphicsPipeline, GraphicsPipelineCreateInfo, GraphicsShaderCreateInfo,
+    Image, ImageBarrier, ImageView, PipelineLayout, RenderingAttachment, Sampler, Vertex,
+    WriteDescriptorSet, WriteDescriptorSetKind,
 };
 use app::{App, AppConfig, BaseApp};
 use gui::egui;
@@ -301,12 +302,15 @@ impl Skybox {
         }]);
 
         let extent = self.skybox_pass_framebuffer.image.extent2d();
+
         buffer.begin_rendering(
-            &self.skybox_pass_framebuffer.view,
+            &[RenderingAttachment {
+                view: &self.skybox_pass_framebuffer.view,
+                load_op: vk::AttachmentLoadOp::DONT_CARE,
+                clear_value: None,
+            }],
             None,
             extent,
-            vk::AttachmentLoadOp::DONT_CARE,
-            None,
         );
         self.skybox_pass.bind(buffer);
         buffer.bind_vertex_buffer(&self.skybox_vertex_buffer);
@@ -353,11 +357,13 @@ impl Skybox {
         target_extent: vk::Extent2D,
     ) {
         buffer.begin_rendering(
-            target_view,
+            &[RenderingAttachment {
+                view: target_view,
+                load_op: vk::AttachmentLoadOp::DONT_CARE,
+                clear_value: None,
+            }],
             None,
             target_extent,
-            vk::AttachmentLoadOp::DONT_CARE,
-            None,
         );
 
         pass.bind(buffer);
@@ -741,9 +747,14 @@ fn create_skybox_pass(
             primitive_topology: vk::PrimitiveTopology::TRIANGLE_LIST,
             cull_mode: vk::CullModeFlags::BACK,
             extent: None,
-            color_attachment_format,
-            color_attachment_blend: None,
-            depth_attachment_format: None,
+            color_attachments: ColorAttachmentsInfo {
+                formats: &[color_attachment_format],
+                blends: &[vk::PipelineColorBlendAttachmentState {
+                    color_write_mask: vk::ColorComponentFlags::RGBA,
+                    ..Default::default()
+                }],
+            },
+            depth: None,
             dynamic_states: Some(&[vk::DynamicState::SCISSOR, vk::DynamicState::VIEWPORT]),
         },
     )?;
@@ -921,9 +932,14 @@ fn create_tonemap_pass_pipeline(
             primitive_topology: vk::PrimitiveTopology::TRIANGLE_LIST,
             cull_mode: vk::CullModeFlags::BACK,
             extent: None,
-            color_attachment_format,
-            color_attachment_blend: None,
-            depth_attachment_format: None,
+            color_attachments: ColorAttachmentsInfo {
+                formats: &[color_attachment_format],
+                blends: &[vk::PipelineColorBlendAttachmentState {
+                    color_write_mask: vk::ColorComponentFlags::RGBA,
+                    ..Default::default()
+                }],
+            },
+            depth: None,
             dynamic_states: Some(&[vk::DynamicState::SCISSOR, vk::DynamicState::VIEWPORT]),
         },
     )?;
@@ -1000,9 +1016,14 @@ fn create_calibration_pass_pipeline(
             primitive_topology: vk::PrimitiveTopology::TRIANGLE_LIST,
             cull_mode: vk::CullModeFlags::BACK,
             extent: None,
-            color_attachment_format,
-            color_attachment_blend: None,
-            depth_attachment_format: None,
+            color_attachments: ColorAttachmentsInfo {
+                formats: &[color_attachment_format],
+                blends: &[vk::PipelineColorBlendAttachmentState {
+                    color_write_mask: vk::ColorComponentFlags::RGBA,
+                    ..Default::default()
+                }],
+            },
+            depth: None,
             dynamic_states: Some(&[vk::DynamicState::SCISSOR, vk::DynamicState::VIEWPORT]),
         },
     )?;

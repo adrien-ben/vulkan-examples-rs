@@ -16,10 +16,22 @@ pub struct GraphicsPipelineCreateInfo<'a> {
     pub primitive_topology: vk::PrimitiveTopology,
     pub cull_mode: vk::CullModeFlags,
     pub extent: Option<vk::Extent2D>,
-    pub color_attachment_format: vk::Format,
-    pub color_attachment_blend: Option<vk::PipelineColorBlendAttachmentState>,
-    pub depth_attachment_format: Option<vk::Format>,
+    pub color_attachments: ColorAttachmentsInfo<'a>,
+    pub depth: Option<DepthInfo>,
     pub dynamic_states: Option<&'a [vk::DynamicState]>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ColorAttachmentsInfo<'a> {
+    pub formats: &'a [vk::Format],
+    pub blends: &'a [vk::PipelineColorBlendAttachmentState],
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct DepthInfo {
+    pub format: vk::Format,
+    pub enable_depth_test: bool,
+    pub enable_depth_write: bool,
 }
 
 pub trait Vertex {
@@ -121,25 +133,17 @@ impl GraphicsPipeline {
             .alpha_to_one_enable(false);
 
         // blending
-        let color_blend_attachment =
-            create_info
-                .color_attachment_blend
-                .unwrap_or(vk::PipelineColorBlendAttachmentState {
-                    color_write_mask: vk::ColorComponentFlags::RGBA,
-                    ..Default::default()
-                });
-        let color_blend_attachments = [color_blend_attachment];
         let color_blending_info = vk::PipelineColorBlendStateCreateInfo::builder()
             .logic_op_enable(false)
             .logic_op(vk::LogicOp::COPY)
-            .attachments(&color_blend_attachments)
+            .attachments(create_info.color_attachments.blends)
             .blend_constants([0.0, 0.0, 0.0, 0.0]);
 
         // depth
-        let depth_stencil_info = create_info.depth_attachment_format.map(|_| {
+        let depth_stencil_info = create_info.depth.map(|d| {
             vk::PipelineDepthStencilStateCreateInfo::builder()
-                .depth_test_enable(true)
-                .depth_write_enable(true)
+                .depth_test_enable(d.enable_depth_test)
+                .depth_write_enable(d.enable_depth_write)
                 .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
                 .depth_bounds_test_enable(false)
                 .min_depth_bounds(0.0)
@@ -154,11 +158,10 @@ impl GraphicsPipeline {
             .dynamic_states(create_info.dynamic_states.unwrap_or(&[]));
 
         // dynamic rendering
-        let color_attachment_formats = [create_info.color_attachment_format];
         let mut rendering_info = vk::PipelineRenderingCreateInfo::builder()
-            .color_attachment_formats(&color_attachment_formats);
-        if let Some(format) = create_info.depth_attachment_format {
-            rendering_info = rendering_info.depth_attachment_format(format);
+            .color_attachment_formats(create_info.color_attachments.formats);
+        if let Some(d) = create_info.depth {
+            rendering_info = rendering_info.depth_attachment_format(d.format);
         }
 
         let mut pipeline_info = vk::GraphicsPipelineCreateInfo::builder()

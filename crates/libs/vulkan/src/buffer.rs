@@ -10,7 +10,7 @@ use gpu_allocator::{
     MemoryLocation,
 };
 
-use crate::{device::Device, Context};
+use crate::{device::Device, utils::compute_aligned_size_of, Context};
 
 pub struct Buffer {
     device: Arc<Device>,
@@ -65,6 +65,28 @@ impl Buffer {
                 .as_ptr();
             let mut align =
                 ash::util::Align::new(data_ptr, align_of::<T>() as _, size_of_val(data) as _);
+            align.copy_from_slice(data);
+        };
+
+        Ok(())
+    }
+
+    pub fn copy_data_to_buffer_with_alignment<T: Copy>(
+        &self,
+        data: &[T],
+        alignment: vk::DeviceSize,
+    ) -> Result<()> {
+        let size = data.len() as vk::DeviceSize * compute_aligned_size_of::<T>(alignment);
+
+        unsafe {
+            let data_ptr = self
+                .allocation
+                .as_ref()
+                .unwrap()
+                .mapped_ptr()
+                .unwrap()
+                .as_ptr();
+            let mut align = ash::util::Align::new(data_ptr, alignment, size);
             align.copy_from_slice(data);
         };
 

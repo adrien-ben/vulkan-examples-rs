@@ -299,4 +299,8 @@ impl Context {
     pub fn supported_surface_formats(&self) -> &[vk::SurfaceFormatKHR] {
         &self.supported_surface_formats
     }
+
+    pub fn physical_device_limits(&self) -> &vk::PhysicalDeviceLimits {
+        &self.physical_device.limits
+    }
 }

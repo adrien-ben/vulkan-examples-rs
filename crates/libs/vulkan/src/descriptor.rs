@@ -152,6 +152,23 @@ impl DescriptorSet {
                         .buffer_info(std::slice::from_ref(buffer_infos.last().unwrap()))
                         .build()
                 }
+                UniformBufferDynamic {
+                    buffer,
+                    byte_stride,
+                } => {
+                    let buffer_info = vk::DescriptorBufferInfo::builder()
+                        .buffer(buffer.inner)
+                        .range(byte_stride);
+
+                    buffer_infos.push(buffer_info);
+
+                    vk::WriteDescriptorSet::builder()
+                        .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC)
+                        .dst_binding(write.binding)
+                        .dst_set(self.inner)
+                        .buffer_info(std::slice::from_ref(buffer_infos.last().unwrap()))
+                        .build()
+                }
                 StorageBuffer { buffer } => {
                     let buffer_info = vk::DescriptorBufferInfo::builder()
                         .buffer(buffer.inner)
@@ -230,6 +247,10 @@ pub enum WriteDescriptorSetKind<'a> {
     },
     UniformBuffer {
         buffer: &'a Buffer,
+    },
+    UniformBufferDynamic {
+        buffer: &'a Buffer,
+        byte_stride: vk::DeviceSize,
     },
     StorageBuffer {
         buffer: &'a Buffer,

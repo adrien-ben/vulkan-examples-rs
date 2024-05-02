@@ -225,6 +225,27 @@ impl CommandBuffer {
         }
     }
 
+    pub fn bind_descriptor_sets_with_dynamic_offsets(
+        &self,
+        bind_point: vk::PipelineBindPoint,
+        layout: &PipelineLayout,
+        first_set: u32,
+        sets: &[&DescriptorSet],
+        dynamic_offsets: &[u32],
+    ) {
+        let sets = sets.iter().map(|s| s.inner).collect::<Vec<_>>();
+        unsafe {
+            self.device.inner.cmd_bind_descriptor_sets(
+                self.inner,
+                bind_point,
+                layout.inner,
+                first_set,
+                &sets,
+                dynamic_offsets,
+            )
+        }
+    }
+
     pub fn pipeline_buffer_barriers(&self, barriers: &[BufferBarrier]) {
         let barriers = barriers
             .iter()
@@ -395,36 +416,43 @@ impl CommandBuffer {
 
     pub fn begin_rendering(
         &self,
-        color_attachment_view: &ImageView,
-        depth_attachment_view: Option<&ImageView>,
+        color_attachments: &[RenderingAttachment],
+        depth_attachment: Option<RenderingAttachment>,
         extent: vk::Extent2D,
-        load_op: vk::AttachmentLoadOp,
-        clear_color: Option<[f32; 4]>,
     ) {
-        let color_attachment_info = vk::RenderingAttachmentInfo::builder()
-            .image_view(color_attachment_view.inner)
-            .image_layout(vk::ImageLayout::ATTACHMENT_OPTIMAL)
-            .load_op(load_op)
-            .store_op(vk::AttachmentStoreOp::STORE)
-            .clear_value(vk::ClearValue {
-                color: vk::ClearColorValue {
-                    float32: clear_color.unwrap_or([1.0; 4]),
-                },
-            });
+        let color_attachment_infos = color_attachments
+            .iter()
+            .map(|a| {
+                vk::RenderingAttachmentInfo::builder()
+                    .image_view(a.view.inner)
+                    .image_layout(vk::ImageLayout::ATTACHMENT_OPTIMAL)
+                    .load_op(a.load_op)
+                    .store_op(vk::AttachmentStoreOp::STORE)
+                    .clear_value(a.clear_value.map(vk::ClearValue::from).unwrap_or(
+                        vk::ClearValue {
+                            color: vk::ClearColorValue { float32: [1.0; 4] },
+                        },
+                    ))
+                    .build()
+            })
+            .collect::<Vec<_>>();
 
-        let depth_attachment_info = depth_attachment_view.map(|v| {
-            vk::RenderingAttachmentInfo::builder()
-                .image_view(v.inner)
-                .image_layout(vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL)
-                .load_op(load_op)
-                .store_op(vk::AttachmentStoreOp::STORE)
-                .clear_value(vk::ClearValue {
-                    depth_stencil: vk::ClearDepthStencilValue {
-                        depth: 1.0,
-                        stencil: 0,
-                    },
-                })
-        });
+        let depth_attachment_info =
+            depth_attachment.map(|a| {
+                vk::RenderingAttachmentInfo::builder()
+                    .image_view(a.view.inner)
+                    .image_layout(vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL)
+                    .load_op(a.load_op)
+                    .store_op(vk::AttachmentStoreOp::STORE)
+                    .clear_value(a.clear_value.map(vk::ClearValue::from).unwrap_or(
+                        vk::ClearValue {
+                            depth_stencil: vk::ClearDepthStencilValue {
+                                depth: 1.0,
+                                stencil: 0,
+                            },
+                        },
+                    ))
+            });
 
         let mut rendering_info = vk::RenderingInfo::builder()
             .render_area(vk::Rect2D {
@@ -432,7 +460,7 @@ impl CommandBuffer {
                 extent,
             })
             .layer_count(1)
-            .color_attachments(std::slice::from_ref(&color_attachment_info));
+            .color_attachments(&color_attachment_infos);
         if let Some(depth) = &depth_attachment_info {
             rendering_info = rendering_info.depth_attachment(depth);
         }
@@ -521,4 +549,48 @@ pub struct ImageBarrier<'a> {
     pub dst_access_mask: vk::AccessFlags2,
     pub src_stage_mask: vk::PipelineStageFlags2,
     pub dst_stage_mask: vk::PipelineStageFlags2,
+}
+
+#[derive(Copy, Clone)]
+pub struct RenderingAttachment<'a> {
+    pub view: &'a ImageView,
+    pub load_op: vk::AttachmentLoadOp,
+    pub clear_value: Option<ClearValue>,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum ClearValue {
+    ColorFloat([f32; 4]),
+    ColorInt([i32; 4]),
+    ColorUint([u32; 4]),
+    Depth(f32),
+    DepthStencil((f32, u32)),
+}
+
+impl From<ClearValue> for vk::ClearValue {
+    fn from(v: ClearValue) -> Self {
+        match v {
+            ClearValue::ColorFloat(c) => vk::ClearValue {
+                color: vk::ClearColorValue { float32: c },
+            },
+            ClearValue::ColorInt(c) => vk::ClearValue {
+                color: vk::ClearColorValue { int32: c },
+            },
+            ClearValue::ColorUint(c) => vk::ClearValue {
+                color: vk::ClearColorValue { uint32: c },
+            },
+            ClearValue::Depth(d) => vk::ClearValue {
+                depth_stencil: vk::ClearDepthStencilValue {
+                    depth: d,
+                    stencil: 0,
+                },
+            },
+            ClearValue::DepthStencil((d, s)) => vk::ClearValue {
+                depth_stencil: vk::ClearDepthStencilValue {
+                    depth: d,
+                    stencil: s,
+                },
+            },
+        }
+    }
 }

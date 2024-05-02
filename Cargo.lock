@@ -3111,6 +3111,7 @@ name = "wboit"
 version = "0.1.0"
 dependencies = [
  "app",
+ "gui",
 ]
 
 [[package]]

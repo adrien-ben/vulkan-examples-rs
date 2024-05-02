@@ -15,6 +15,7 @@ You can run one of the following example.
 - gpu_particles: Particles simulated on the gpu using a compute shader.
 - mandelbrot: Render mandelbrot set on gpu with expensive setting. The goal is to be gpu bound with a simple setup for some tests.
 - [hdr_skybox](crates/examples/hdr_skybox/): Display a skybox from a environment HDRi image targetting an HDR surface.
+- [wboit](crates/examples/wboit/): Weighted, Blended Order-Independent Transparency.
 
 ```ps1
 # Powershell example (all scripts have a .sh version)

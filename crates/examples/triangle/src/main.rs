@@ -5,8 +5,8 @@ use app::anyhow::Result;
 use app::vulkan::ash::vk;
 use app::vulkan::utils::create_gpu_only_buffer_from_data;
 use app::vulkan::{
-    Buffer, Context, GraphicsPipeline, GraphicsPipelineCreateInfo, GraphicsShaderCreateInfo,
-    PipelineLayout,
+    Buffer, ColorAttachmentsInfo, Context, GraphicsPipeline, GraphicsPipelineCreateInfo,
+    GraphicsShaderCreateInfo, PipelineLayout, RenderingAttachment,
 };
 use app::{App, BaseApp};
 
@@ -60,11 +60,13 @@ impl App for Triangle {
         let buffer = &base.command_buffers[image_index];
 
         buffer.begin_rendering(
-            &base.swapchain.views[image_index],
+            &[RenderingAttachment {
+                view: &base.swapchain.views[image_index],
+                load_op: vk::AttachmentLoadOp::CLEAR,
+                clear_value: None,
+            }],
             None,
             base.swapchain.extent,
-            vk::AttachmentLoadOp::CLEAR,
-            None,
         );
         buffer.bind_graphics_pipeline(&self.pipeline);
         buffer.bind_vertex_buffer(&self.vertex_buffer);
@@ -155,9 +157,14 @@ fn create_pipeline(
             primitive_topology: vk::PrimitiveTopology::TRIANGLE_LIST,
             cull_mode: vk::CullModeFlags::BACK,
             extent: None,
-            color_attachment_format,
-            color_attachment_blend: None,
-            depth_attachment_format: None,
+            color_attachments: ColorAttachmentsInfo {
+                formats: &[color_attachment_format],
+                blends: &[vk::PipelineColorBlendAttachmentState {
+                    color_write_mask: vk::ColorComponentFlags::RGBA,
+                    ..Default::default()
+                }],
+            },
+            depth: None,
             dynamic_states: Some(&[vk::DynamicState::SCISSOR, vk::DynamicState::VIEWPORT]),
         },
     )

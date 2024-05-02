@@ -7,9 +7,10 @@ use app::vulkan::ash::vk;
 use app::vulkan::gpu_allocator::MemoryLocation;
 use app::vulkan::utils::create_gpu_only_buffer_from_data;
 use app::vulkan::{
-    Buffer, BufferBarrier, ComputePipeline, ComputePipelineCreateInfo, Context, DescriptorPool,
-    DescriptorSet, DescriptorSetLayout, GraphicsPipeline, GraphicsPipelineCreateInfo,
-    GraphicsShaderCreateInfo, PipelineLayout, Vertex, WriteDescriptorSet, WriteDescriptorSetKind,
+    Buffer, BufferBarrier, ClearValue, ColorAttachmentsInfo, ComputePipeline,
+    ComputePipelineCreateInfo, Context, DescriptorPool, DescriptorSet, DescriptorSetLayout,
+    GraphicsPipeline, GraphicsPipelineCreateInfo, GraphicsShaderCreateInfo, PipelineLayout,
+    RenderingAttachment, Vertex, WriteDescriptorSet, WriteDescriptorSetKind,
 };
 use app::{log, App, BaseApp};
 use gui::egui::{self, Widget};
@@ -238,11 +239,13 @@ impl App for Particles {
         }]);
 
         buffer.begin_rendering(
-            &base.swapchain.views[image_index],
+            &[RenderingAttachment {
+                view: &base.swapchain.views[image_index],
+                load_op: vk::AttachmentLoadOp::CLEAR,
+                clear_value: Some(ClearValue::ColorFloat([0.0, 0.0, 0.0, 1.0])),
+            }],
             None,
             base.swapchain.extent,
-            vk::AttachmentLoadOp::CLEAR,
-            Some([0.0, 0.0, 0.0, 1.0]),
         );
         buffer.bind_graphics_pipeline(&self.graphics_pipeline);
         buffer.bind_descriptor_sets(
@@ -492,7 +495,7 @@ fn create_particle_buffer(context: &Context) -> Result<Buffer> {
 fn create_graphics_pipeline(
     context: &Context,
     layout: &PipelineLayout,
-    color_attachement_format: vk::Format,
+    color_attachment_format: vk::Format,
 ) -> Result<GraphicsPipeline> {
     context.create_graphics_pipeline::<Particle>(
         layout,
@@ -510,18 +513,20 @@ fn create_graphics_pipeline(
             primitive_topology: vk::PrimitiveTopology::POINT_LIST,
             cull_mode: vk::CullModeFlags::BACK,
             extent: None,
-            color_attachment_format: color_attachement_format,
-            color_attachment_blend: Some(vk::PipelineColorBlendAttachmentState {
-                blend_enable: vk::TRUE,
-                src_color_blend_factor: vk::BlendFactor::ONE,
-                dst_color_blend_factor: vk::BlendFactor::ONE,
-                color_blend_op: vk::BlendOp::ADD,
-                src_alpha_blend_factor: vk::BlendFactor::ONE,
-                dst_alpha_blend_factor: vk::BlendFactor::ZERO,
-                alpha_blend_op: vk::BlendOp::ADD,
-                color_write_mask: vk::ColorComponentFlags::RGBA,
-            }),
-            depth_attachment_format: None,
+            color_attachments: ColorAttachmentsInfo {
+                formats: &[color_attachment_format],
+                blends: &[vk::PipelineColorBlendAttachmentState {
+                    blend_enable: vk::TRUE,
+                    src_color_blend_factor: vk::BlendFactor::ONE,
+                    dst_color_blend_factor: vk::BlendFactor::ONE,
+                    color_blend_op: vk::BlendOp::ADD,
+                    src_alpha_blend_factor: vk::BlendFactor::ONE,
+                    dst_alpha_blend_factor: vk::BlendFactor::ZERO,
+                    alpha_blend_op: vk::BlendOp::ADD,
+                    color_write_mask: vk::ColorComponentFlags::RGBA,
+                }],
+            },
+            depth: None,
             dynamic_states: Some(&[vk::DynamicState::SCISSOR, vk::DynamicState::VIEWPORT]),
         },
     )
