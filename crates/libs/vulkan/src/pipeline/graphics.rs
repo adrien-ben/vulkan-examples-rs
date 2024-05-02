@@ -14,9 +14,11 @@ pub struct GraphicsPipeline {
 pub struct GraphicsPipelineCreateInfo<'a> {
     pub shaders: &'a [GraphicsShaderCreateInfo<'a>],
     pub primitive_topology: vk::PrimitiveTopology,
+    pub cull_mode: vk::CullModeFlags,
     pub extent: Option<vk::Extent2D>,
     pub color_attachment_format: vk::Format,
     pub color_attachment_blend: Option<vk::PipelineColorBlendAttachmentState>,
+    pub depth_attachment_format: Option<vk::Format>,
     pub dynamic_states: Option<&'a [vk::DynamicState]>,
 }
 
@@ -103,7 +105,7 @@ impl GraphicsPipeline {
             .rasterizer_discard_enable(false)
             .polygon_mode(vk::PolygonMode::FILL)
             .line_width(1.0)
-            .cull_mode(vk::CullModeFlags::BACK)
+            .cull_mode(create_info.cull_mode)
             .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
             .depth_bias_enable(false)
             .depth_bias_constant_factor(0.0)
@@ -133,6 +135,20 @@ impl GraphicsPipeline {
             .attachments(&color_blend_attachments)
             .blend_constants([0.0, 0.0, 0.0, 0.0]);
 
+        // depth
+        let depth_stencil_info = create_info.depth_attachment_format.map(|_| {
+            vk::PipelineDepthStencilStateCreateInfo::builder()
+                .depth_test_enable(true)
+                .depth_write_enable(true)
+                .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
+                .depth_bounds_test_enable(false)
+                .min_depth_bounds(0.0)
+                .max_depth_bounds(1.0)
+                .stencil_test_enable(false)
+                .front(Default::default())
+                .back(Default::default())
+        });
+
         // dynamic states
         let dynamic_state_info = vk::PipelineDynamicStateCreateInfo::builder()
             .dynamic_states(create_info.dynamic_states.unwrap_or(&[]));
@@ -141,8 +157,11 @@ impl GraphicsPipeline {
         let color_attachment_formats = [create_info.color_attachment_format];
         let mut rendering_info = vk::PipelineRenderingCreateInfo::builder()
             .color_attachment_formats(&color_attachment_formats);
+        if let Some(format) = create_info.depth_attachment_format {
+            rendering_info = rendering_info.depth_attachment_format(format);
+        }
 
-        let pipeline_info = vk::GraphicsPipelineCreateInfo::builder()
+        let mut pipeline_info = vk::GraphicsPipelineCreateInfo::builder()
             .stages(&shader_stages_infos)
             .vertex_input_state(&vertex_input_info)
             .input_assembly_state(&input_assembly_info)
@@ -153,6 +172,11 @@ impl GraphicsPipeline {
             .dynamic_state(&dynamic_state_info)
             .layout(layout.inner)
             .push_next(&mut rendering_info);
+
+        // depth
+        if let Some(info) = &depth_stencil_info {
+            pipeline_info = pipeline_info.depth_stencil_state(info);
+        }
 
         let inner = unsafe {
             device

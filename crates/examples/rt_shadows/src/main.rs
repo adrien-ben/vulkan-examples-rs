@@ -366,7 +366,7 @@ fn create_model(context: &Context) -> Result<Model> {
             }]);
         })?;
 
-        let view = image.create_image_view()?;
+        let view = image.create_image_view(vk::ImageAspectFlags::COLOR)?;
 
         images.push(image);
         views.push(view);
@@ -396,7 +396,7 @@ fn create_model(context: &Context) -> Result<Model> {
             }]);
         })?;
 
-        let view = image.create_image_view()?;
+        let view = image.create_image_view(vk::ImageAspectFlags::COLOR)?;
 
         images.push(image);
         views.push(view);

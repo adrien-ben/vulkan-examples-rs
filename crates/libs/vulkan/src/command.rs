@@ -395,13 +395,14 @@ impl CommandBuffer {
 
     pub fn begin_rendering(
         &self,
-        image_view: &ImageView,
+        color_attachment_view: &ImageView,
+        depth_attachment_view: Option<&ImageView>,
         extent: vk::Extent2D,
         load_op: vk::AttachmentLoadOp,
         clear_color: Option<[f32; 4]>,
     ) {
         let color_attachment_info = vk::RenderingAttachmentInfo::builder()
-            .image_view(image_view.inner)
+            .image_view(color_attachment_view.inner)
             .image_layout(vk::ImageLayout::ATTACHMENT_OPTIMAL)
             .load_op(load_op)
             .store_op(vk::AttachmentStoreOp::STORE)
@@ -411,13 +412,30 @@ impl CommandBuffer {
                 },
             });
 
-        let rendering_info = vk::RenderingInfo::builder()
+        let depth_attachment_info = depth_attachment_view.map(|v| {
+            vk::RenderingAttachmentInfo::builder()
+                .image_view(v.inner)
+                .image_layout(vk::ImageLayout::DEPTH_ATTACHMENT_OPTIMAL)
+                .load_op(load_op)
+                .store_op(vk::AttachmentStoreOp::STORE)
+                .clear_value(vk::ClearValue {
+                    depth_stencil: vk::ClearDepthStencilValue {
+                        depth: 1.0,
+                        stencil: 0,
+                    },
+                })
+        });
+
+        let mut rendering_info = vk::RenderingInfo::builder()
             .render_area(vk::Rect2D {
                 offset: vk::Offset2D { x: 0, y: 0 },
                 extent,
             })
             .layer_count(1)
             .color_attachments(std::slice::from_ref(&color_attachment_info));
+        if let Some(depth) = &depth_attachment_info {
+            rendering_info = rendering_info.depth_attachment(depth);
+        }
 
         unsafe {
             self.device

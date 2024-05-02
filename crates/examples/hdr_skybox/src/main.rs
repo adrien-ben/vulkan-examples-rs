@@ -303,6 +303,7 @@ impl Skybox {
         let extent = self.skybox_pass_framebuffer.image.extent2d();
         buffer.begin_rendering(
             &self.skybox_pass_framebuffer.view,
+            None,
             extent,
             vk::AttachmentLoadOp::DONT_CARE,
             None,
@@ -353,6 +354,7 @@ impl Skybox {
     ) {
         buffer.begin_rendering(
             target_view,
+            None,
             target_extent,
             vk::AttachmentLoadOp::DONT_CARE,
             None,
@@ -537,7 +539,7 @@ impl Texture {
             }]);
         })?;
 
-        let view = image.create_image_view()?;
+        let view = image.create_image_view(vk::ImageAspectFlags::COLOR)?;
         let sampler = context.create_sampler(&Default::default())?;
 
         Ok(Self {
@@ -556,7 +558,7 @@ impl Texture {
             extent.height,
         )?;
 
-        let view = image.create_image_view()?;
+        let view = image.create_image_view(vk::ImageAspectFlags::COLOR)?;
 
         let sampler = context.create_sampler(&Default::default())?;
 
@@ -737,9 +739,11 @@ fn create_skybox_pass(
                 },
             ],
             primitive_topology: vk::PrimitiveTopology::TRIANGLE_LIST,
+            cull_mode: vk::CullModeFlags::BACK,
             extent: None,
             color_attachment_format,
             color_attachment_blend: None,
+            depth_attachment_format: None,
             dynamic_states: Some(&[vk::DynamicState::SCISSOR, vk::DynamicState::VIEWPORT]),
         },
     )?;
@@ -915,9 +919,11 @@ fn create_tonemap_pass_pipeline(
                 },
             ],
             primitive_topology: vk::PrimitiveTopology::TRIANGLE_LIST,
+            cull_mode: vk::CullModeFlags::BACK,
             extent: None,
             color_attachment_format,
             color_attachment_blend: None,
+            depth_attachment_format: None,
             dynamic_states: Some(&[vk::DynamicState::SCISSOR, vk::DynamicState::VIEWPORT]),
         },
     )?;
@@ -992,9 +998,11 @@ fn create_calibration_pass_pipeline(
                 },
             ],
             primitive_topology: vk::PrimitiveTopology::TRIANGLE_LIST,
+            cull_mode: vk::CullModeFlags::BACK,
             extent: None,
             color_attachment_format,
             color_attachment_blend: None,
+            depth_attachment_format: None,
             dynamic_states: Some(&[vk::DynamicState::SCISSOR, vk::DynamicState::VIEWPORT]),
         },
     )?;

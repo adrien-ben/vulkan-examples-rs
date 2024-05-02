@@ -61,6 +61,7 @@ impl App for Triangle {
 
         buffer.begin_rendering(
             &base.swapchain.views[image_index],
+            None,
             base.swapchain.extent,
             vk::AttachmentLoadOp::CLEAR,
             None,
@@ -152,9 +153,11 @@ fn create_pipeline(
                 },
             ],
             primitive_topology: vk::PrimitiveTopology::TRIANGLE_LIST,
+            cull_mode: vk::CullModeFlags::BACK,
             extent: None,
             color_attachment_format,
             color_attachment_blend: None,
+            depth_attachment_format: None,
             dynamic_states: Some(&[vk::DynamicState::SCISSOR, vk::DynamicState::VIEWPORT]),
         },
     )

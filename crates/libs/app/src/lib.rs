@@ -639,6 +639,7 @@ impl<B: App> BaseApp<B> {
         // UI
         self.command_buffers[image_index].begin_rendering(
             &self.swapchain.views[image_index],
+            None,
             self.swapchain.extent,
             vk::AttachmentLoadOp::DONT_CARE,
             None,
@@ -695,7 +696,7 @@ fn create_storage_images(
             extent.height,
         )?;
 
-        let view = image.create_image_view()?;
+        let view = image.create_image_view(vk::ImageAspectFlags::COLOR)?;
 
         context.execute_one_time_commands(|cmd_buffer| {
             cmd_buffer.pipeline_image_barriers(&[ImageBarrier {

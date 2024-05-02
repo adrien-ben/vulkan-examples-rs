@@ -1,12 +1,6 @@
 [workspace]
 members = [
-    "crates/examples/rt_triangle",
-    "crates/examples/rt_shadows",
-    "crates/examples/rt_reflections",
-    "crates/examples/triangle",
-    "crates/examples/gpu_particles",
-    "crates/examples/mandelbrot",
-    "crates/examples/hdr_skybox",
+    "crates/examples/*",
     "crates/libs/*",
 ]
 resolver = "2"

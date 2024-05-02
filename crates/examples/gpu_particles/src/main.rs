@@ -239,6 +239,7 @@ impl App for Particles {
 
         buffer.begin_rendering(
             &base.swapchain.views[image_index],
+            None,
             base.swapchain.extent,
             vk::AttachmentLoadOp::CLEAR,
             Some([0.0, 0.0, 0.0, 1.0]),
@@ -507,6 +508,7 @@ fn create_graphics_pipeline(
                 },
             ],
             primitive_topology: vk::PrimitiveTopology::POINT_LIST,
+            cull_mode: vk::CullModeFlags::BACK,
             extent: None,
             color_attachment_format: color_attachement_format,
             color_attachment_blend: Some(vk::PipelineColorBlendAttachmentState {
@@ -519,6 +521,7 @@ fn create_graphics_pipeline(
                 alpha_blend_op: vk::BlendOp::ADD,
                 color_write_mask: vk::ColorComponentFlags::RGBA,
             }),
+            depth_attachment_format: None,
             dynamic_states: Some(&[vk::DynamicState::SCISSOR, vk::DynamicState::VIEWPORT]),
         },
     )
