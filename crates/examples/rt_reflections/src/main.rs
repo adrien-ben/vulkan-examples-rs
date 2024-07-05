@@ -195,7 +195,7 @@ impl app::Gui for Gui {
             ui.horizontal(|ui| {
                 ui.label("depth");
                 egui::DragValue::new(&mut self.max_depth)
-                    .clamp_range(1..=100)
+                    .range(1..=100)
                     .ui(ui);
             });
 
