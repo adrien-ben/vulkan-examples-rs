@@ -173,7 +173,7 @@ fn create_bottom_as(context: &mut Context) -> Result<BottomAS> {
     )?;
     let index_buffer_addr = index_buffer.get_device_address();
 
-    let as_geo_triangles_data = vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
+    let as_geo_triangles_data = vk::AccelerationStructureGeometryTrianglesDataKHR::default()
         .vertex_format(vk::Format::R32G32_SFLOAT)
         .vertex_data(vk::DeviceOrHostAddressConstKHR {
             device_address: vertex_buffer_addr,
@@ -183,23 +183,20 @@ fn create_bottom_as(context: &mut Context) -> Result<BottomAS> {
         .index_data(vk::DeviceOrHostAddressConstKHR {
             device_address: index_buffer_addr,
         })
-        .max_vertex(INDICES.len() as _)
-        .build();
+        .max_vertex(INDICES.len() as _);
 
-    let as_struct_geo = vk::AccelerationStructureGeometryKHR::builder()
+    let as_struct_geo = vk::AccelerationStructureGeometryKHR::default()
         .geometry_type(vk::GeometryTypeKHR::TRIANGLES)
         .flags(vk::GeometryFlagsKHR::OPAQUE)
         .geometry(vk::AccelerationStructureGeometryDataKHR {
             triangles: as_geo_triangles_data,
-        })
-        .build();
+        });
 
-    let build_range_info = vk::AccelerationStructureBuildRangeInfoKHR::builder()
+    let build_range_info = vk::AccelerationStructureBuildRangeInfoKHR::default()
         .first_vertex(0)
         .primitive_count(1)
         .primitive_offset(0)
-        .transform_offset(0)
-        .build();
+        .transform_offset(0);
 
     let inner = context.create_bottom_level_acceleration_structure(
         &[as_struct_geo],
@@ -245,25 +242,22 @@ fn create_top_as(context: &mut Context, bottom_as: &BottomAS) -> Result<TopAS> {
     )?;
     let instance_buffer_addr = instance_buffer.get_device_address();
 
-    let as_struct_geo = vk::AccelerationStructureGeometryKHR::builder()
+    let as_struct_geo = vk::AccelerationStructureGeometryKHR::default()
         .geometry_type(vk::GeometryTypeKHR::INSTANCES)
         .flags(vk::GeometryFlagsKHR::OPAQUE)
         .geometry(vk::AccelerationStructureGeometryDataKHR {
-            instances: vk::AccelerationStructureGeometryInstancesDataKHR::builder()
+            instances: vk::AccelerationStructureGeometryInstancesDataKHR::default()
                 .array_of_pointers(false)
                 .data(vk::DeviceOrHostAddressConstKHR {
                     device_address: instance_buffer_addr,
-                })
-                .build(),
-        })
-        .build();
+                }),
+        });
 
-    let build_range_info = vk::AccelerationStructureBuildRangeInfoKHR::builder()
+    let build_range_info = vk::AccelerationStructureBuildRangeInfoKHR::default()
         .first_vertex(0)
         .primitive_count(1)
         .primitive_offset(0)
-        .transform_offset(0)
-        .build();
+        .transform_offset(0);
 
     let inner = context.create_top_level_acceleration_structure(
         &[as_struct_geo],
@@ -279,19 +273,17 @@ fn create_top_as(context: &mut Context, bottom_as: &BottomAS) -> Result<TopAS> {
 
 fn create_pipeline(context: &Context) -> Result<PipelineRes> {
     // descriptor and pipeline layouts
-    let static_layout_bindings = [vk::DescriptorSetLayoutBinding::builder()
+    let static_layout_bindings = [vk::DescriptorSetLayoutBinding::default()
         .binding(0)
         .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
         .descriptor_count(1)
-        .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR | vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-        .build()];
+        .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR | vk::ShaderStageFlags::CLOSEST_HIT_KHR)];
 
-    let dynamic_layout_bindings = [vk::DescriptorSetLayoutBinding::builder()
+    let dynamic_layout_bindings = [vk::DescriptorSetLayoutBinding::default()
         .binding(1)
         .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
         .descriptor_count(1)
-        .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
-        .build()];
+        .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)];
 
     let static_dsl = context.create_descriptor_set_layout(&static_layout_bindings)?;
     let dynamic_dsl = context.create_descriptor_set_layout(&dynamic_layout_bindings)?;
@@ -342,14 +334,12 @@ fn create_descriptor_sets(
     let set_count = storage_imgs.len() as u32;
 
     let pool_sizes = [
-        vk::DescriptorPoolSize::builder()
+        vk::DescriptorPoolSize::default()
             .ty(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
-            .descriptor_count(1)
-            .build(),
-        vk::DescriptorPoolSize::builder()
+            .descriptor_count(1),
+        vk::DescriptorPoolSize::default()
             .ty(vk::DescriptorType::STORAGE_IMAGE)
-            .descriptor_count(set_count)
-            .build(),
+            .descriptor_count(set_count),
     ];
 
     let pool = context.create_descriptor_pool(set_count + 1, &pool_sizes)?;

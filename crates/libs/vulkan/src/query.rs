@@ -13,7 +13,7 @@ pub struct TimestampQueryPool<const C: usize> {
 
 impl<const C: usize> TimestampQueryPool<C> {
     pub(crate) fn new(device: Arc<Device>, timestamp_period: f64) -> Result<Self> {
-        let create_info = vk::QueryPoolCreateInfo::builder()
+        let create_info = vk::QueryPoolCreateInfo::default()
             .query_type(vk::QueryType::TIMESTAMP)
             .query_count(C as _);
 
@@ -58,7 +58,6 @@ impl<const C: usize> TimestampQueryPool<C> {
             self.device.inner.get_query_pool_results(
                 self.inner,
                 0,
-                C as _,
                 &mut data,
                 vk::QueryResultFlags::WAIT | vk::QueryResultFlags::TYPE_64,
             )?;

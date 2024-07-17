@@ -62,11 +62,10 @@ impl RayTracingPipeline {
         for (shader_index, shader) in create_info.shaders.iter().enumerate() {
             let module = ShaderModule::from_bytes(device.clone(), shader.source)?;
 
-            let stage = vk::PipelineShaderStageCreateInfo::builder()
+            let stage = vk::PipelineShaderStageCreateInfo::default()
                 .stage(shader.stage)
                 .module(module.inner)
-                .name(&entry_point_name)
-                .build();
+                .name(&entry_point_name);
 
             match shader.group {
                 RayTracingShaderGroup::RayGen => shader_group_info.raygen_shader_count += 1,
@@ -74,7 +73,7 @@ impl RayTracingPipeline {
                 RayTracingShaderGroup::ClosestHit => shader_group_info.hit_shader_count += 1,
             };
 
-            let mut group = vk::RayTracingShaderGroupCreateInfoKHR::builder()
+            let mut group = vk::RayTracingShaderGroupCreateInfoKHR::default()
                 .ty(vk::RayTracingShaderGroupTypeKHR::GENERAL)
                 .general_shader(vk::SHADER_UNUSED_KHR)
                 .closest_hit_shader(vk::SHADER_UNUSED_KHR)
@@ -91,22 +90,25 @@ impl RayTracingPipeline {
 
             modules.push(module);
             stages.push(stage);
-            groups.push(group.build());
+            groups.push(group);
         }
 
-        let pipe_info = vk::RayTracingPipelineCreateInfoKHR::builder()
+        let pipe_info = vk::RayTracingPipelineCreateInfoKHR::default()
             .layout(layout.inner)
             .stages(&stages)
             .groups(&groups)
             .max_pipeline_ray_recursion_depth(2);
 
         let inner = unsafe {
-            ray_tracing.pipeline_fn.create_ray_tracing_pipelines(
-                vk::DeferredOperationKHR::null(),
-                vk::PipelineCache::null(),
-                std::slice::from_ref(&pipe_info),
-                None,
-            )?[0]
+            ray_tracing
+                .pipeline_fn
+                .create_ray_tracing_pipelines(
+                    vk::DeferredOperationKHR::null(),
+                    vk::PipelineCache::null(),
+                    std::slice::from_ref(&pipe_info),
+                    None,
+                )
+                .map_err(|e| e.1)?[0]
         };
 
         Ok(Self {

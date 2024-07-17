@@ -40,7 +40,7 @@ impl Image {
             depth: 1,
         };
 
-        let image_info = vk::ImageCreateInfo::builder()
+        let image_info = vk::ImageCreateInfo::default()
             .image_type(vk::ImageType::TYPE_2D)
             .format(format)
             .extent(extent)
@@ -104,7 +104,7 @@ impl Image {
     }
 
     pub fn create_image_view(&self, aspect_mask: vk::ImageAspectFlags) -> Result<ImageView> {
-        let view_info = vk::ImageViewCreateInfo::builder()
+        let view_info = vk::ImageViewCreateInfo::default()
             .image(self.inner)
             .view_type(vk::ImageViewType::TYPE_2D)
             .format(self.format)

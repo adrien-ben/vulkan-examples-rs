@@ -28,7 +28,7 @@ impl Buffer {
         memory_location: MemoryLocation,
         size: vk::DeviceSize,
     ) -> Result<Self> {
-        let create_info = vk::BufferCreateInfo::builder().size(size).usage(usage);
+        let create_info = vk::BufferCreateInfo::default().size(size).usage(usage);
         let inner = unsafe { device.inner.create_buffer(&create_info, None)? };
         let requirements = unsafe { device.inner.get_buffer_memory_requirements(inner) };
         let allocation = allocator.lock().unwrap().allocate(&AllocationCreateDesc {
@@ -94,7 +94,7 @@ impl Buffer {
     }
 
     pub fn get_device_address(&self) -> u64 {
-        let addr_info = vk::BufferDeviceAddressInfo::builder().buffer(self.inner);
+        let addr_info = vk::BufferDeviceAddressInfo::default().buffer(self.inner);
         unsafe { self.device.inner.get_buffer_device_address(&addr_info) }
     }
 }

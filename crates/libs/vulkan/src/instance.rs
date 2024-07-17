@@ -1,14 +1,14 @@
 use std::ffi::{c_void, CStr, CString};
 
 use anyhow::Result;
-use ash::{extensions::ext::DebugUtils, vk, Entry, Instance as AshInstance};
-use raw_window_handle::HasRawDisplayHandle;
+use ash::{ext::debug_utils, vk, Entry, Instance as AshInstance};
+use raw_window_handle::HasDisplayHandle;
 
 use crate::{physical_device::PhysicalDevice, surface::Surface, Version};
 
 pub struct Instance {
     pub(crate) inner: AshInstance,
-    debug_utils: DebugUtils,
+    debug_utils: debug_utils::Instance,
     debug_utils_messenger: vk::DebugUtilsMessengerEXT,
     physical_devices: Vec<PhysicalDevice>,
 }
@@ -16,7 +16,7 @@ pub struct Instance {
 impl Instance {
     pub(crate) fn new(
         entry: &Entry,
-        display_handle: &dyn HasRawDisplayHandle,
+        display_handle: &dyn HasDisplayHandle,
         api_version: Version,
         app_name: &str,
         required_extensions: &[&str],
@@ -24,15 +24,15 @@ impl Instance {
         // Vulkan instance
         let app_name = CString::new(app_name)?;
 
-        let app_info = vk::ApplicationInfo::builder()
+        let app_info = vk::ApplicationInfo::default()
             .application_name(app_name.as_c_str())
             .api_version(api_version.make_api_version());
 
         // Extension support
         let mut extension_names =
-            ash_window::enumerate_required_extensions(display_handle.raw_display_handle())?
+            ash_window::enumerate_required_extensions(display_handle.display_handle()?.as_raw())?
                 .to_vec();
-        extension_names.push(DebugUtils::name().as_ptr());
+        extension_names.push(debug_utils::NAME.as_ptr());
 
         let required_extensions_c = required_extensions
             .iter()
@@ -44,14 +44,14 @@ impl Instance {
 
         check_extensions_support(entry, &extension_names)?;
 
-        let instance_create_info = vk::InstanceCreateInfo::builder()
+        let instance_create_info = vk::InstanceCreateInfo::default()
             .application_info(&app_info)
             .enabled_extension_names(&extension_names);
 
         let inner = unsafe { entry.create_instance(&instance_create_info, None)? };
 
         // Vulkan debug report
-        let create_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
+        let create_info = vk::DebugUtilsMessengerCreateInfoEXT::default()
             .flags(vk::DebugUtilsMessengerCreateFlagsEXT::empty())
             .message_severity(
                 vk::DebugUtilsMessageSeverityFlagsEXT::INFO
@@ -64,7 +64,7 @@ impl Instance {
                     | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
             )
             .pfn_user_callback(Some(vulkan_debug_callback));
-        let debug_utils = DebugUtils::new(entry, &inner);
+        let debug_utils = debug_utils::Instance::new(entry, &inner);
         let debug_utils_messenger =
             unsafe { debug_utils.create_debug_utils_messenger(&create_info, None)? };
 
@@ -102,7 +102,7 @@ impl Instance {
 }
 
 fn check_extensions_support(entry: &Entry, required: &[*const i8]) -> Result<()> {
-    let supported = entry.enumerate_instance_extension_properties(None)?;
+    let supported = unsafe { entry.enumerate_instance_extension_properties(None)? };
 
     for r in required {
         let r = unsafe { CStr::from_ptr(*r) };

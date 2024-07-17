@@ -647,30 +647,26 @@ fn create_opaque_pass(
     color_attachment_format: vk::Format,
 ) -> Result<Pass> {
     let bindings = [
-        vk::DescriptorSetLayoutBinding::builder()
+        vk::DescriptorSetLayoutBinding::default()
             .binding(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
             .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::VERTEX)
-            .build(),
-        vk::DescriptorSetLayoutBinding::builder()
+            .stage_flags(vk::ShaderStageFlags::VERTEX),
+        vk::DescriptorSetLayoutBinding::default()
             .binding(1)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC)
             .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::VERTEX)
-            .build(),
+            .stage_flags(vk::ShaderStageFlags::VERTEX),
     ];
     let dsl = context.create_descriptor_set_layout(&bindings)?;
 
     let pool_sizes = [
-        vk::DescriptorPoolSize::builder()
+        vk::DescriptorPoolSize::default()
             .ty(vk::DescriptorType::UNIFORM_BUFFER)
-            .descriptor_count(1)
-            .build(),
-        vk::DescriptorPoolSize::builder()
+            .descriptor_count(1),
+        vk::DescriptorPoolSize::default()
             .ty(vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC)
-            .descriptor_count(1)
-            .build(),
+            .descriptor_count(1),
     ];
 
     let descriptor_pool = context.create_descriptor_pool(1, &pool_sizes)?;
@@ -739,30 +735,26 @@ fn create_transparent_pass(
     instance_ubo: &Buffer,
 ) -> Result<Pass> {
     let bindings = [
-        vk::DescriptorSetLayoutBinding::builder()
+        vk::DescriptorSetLayoutBinding::default()
             .binding(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
             .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::VERTEX)
-            .build(),
-        vk::DescriptorSetLayoutBinding::builder()
+            .stage_flags(vk::ShaderStageFlags::VERTEX),
+        vk::DescriptorSetLayoutBinding::default()
             .binding(1)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC)
             .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::VERTEX)
-            .build(),
+            .stage_flags(vk::ShaderStageFlags::VERTEX),
     ];
     let dsl = context.create_descriptor_set_layout(&bindings)?;
 
     let pool_sizes = [
-        vk::DescriptorPoolSize::builder()
+        vk::DescriptorPoolSize::default()
             .ty(vk::DescriptorType::UNIFORM_BUFFER)
-            .descriptor_count(1)
-            .build(),
-        vk::DescriptorPoolSize::builder()
+            .descriptor_count(1),
+        vk::DescriptorPoolSize::default()
             .ty(vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC)
-            .descriptor_count(1)
-            .build(),
+            .descriptor_count(1),
     ];
 
     let descriptor_pool = context.create_descriptor_pool(1, &pool_sizes)?;
@@ -848,25 +840,22 @@ fn create_composite_pass(
     color_attachment_format: vk::Format,
 ) -> Result<Pass> {
     let bindings = [
-        vk::DescriptorSetLayoutBinding::builder()
+        vk::DescriptorSetLayoutBinding::default()
             .binding(0)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
-            .build(),
-        vk::DescriptorSetLayoutBinding::builder()
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT),
+        vk::DescriptorSetLayoutBinding::default()
             .binding(1)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
-            .build(),
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT),
     ];
     let dsl = context.create_descriptor_set_layout(&bindings)?;
 
-    let pool_sizes = [vk::DescriptorPoolSize::builder()
+    let pool_sizes = [vk::DescriptorPoolSize::default()
         .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-        .descriptor_count(2)
-        .build()];
+        .descriptor_count(2)];
 
     let descriptor_pool = context.create_descriptor_pool(1, &pool_sizes)?;
     let descriptor_set = descriptor_pool.allocate_set(&dsl)?;

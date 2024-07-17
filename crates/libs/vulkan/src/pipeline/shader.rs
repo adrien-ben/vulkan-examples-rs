@@ -14,7 +14,7 @@ impl ShaderModule {
     pub(crate) fn from_bytes(device: Arc<Device>, source: &[u8]) -> Result<Self> {
         let source = read_shader_from_bytes(source)?;
 
-        let create_info = vk::ShaderModuleCreateInfo::builder().code(&source);
+        let create_info = vk::ShaderModuleCreateInfo::default().code(&source);
         let inner = unsafe { device.inner.create_shader_module(&create_info, None)? };
 
         Ok(Self { device, inner })

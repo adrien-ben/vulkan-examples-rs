@@ -31,10 +31,9 @@ impl Device {
             indices
                 .iter()
                 .map(|index| {
-                    vk::DeviceQueueCreateInfo::builder()
+                    vk::DeviceQueueCreateInfo::default()
                         .queue_family_index(*index)
                         .queue_priorities(&queue_priorities)
-                        .build()
                 })
                 .collect::<Vec<_>>()
         };
@@ -52,19 +51,19 @@ impl Device {
             independent_blend: device_features.independent_blend.into(),
             ..Default::default()
         };
-        let mut ray_tracing_feature = vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::builder()
+        let mut ray_tracing_feature = vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::default()
             .ray_tracing_pipeline(device_features.ray_tracing_pipeline);
         let mut acceleration_struct_feature =
-            vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder()
+            vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default()
                 .acceleration_structure(device_features.acceleration_structure);
-        let mut vulkan_12_features = vk::PhysicalDeviceVulkan12Features::builder()
+        let mut vulkan_12_features = vk::PhysicalDeviceVulkan12Features::default()
             .runtime_descriptor_array(device_features.runtime_descriptor_array)
             .buffer_device_address(device_features.buffer_device_address);
-        let mut vulkan_13_features = vk::PhysicalDeviceVulkan13Features::builder()
+        let mut vulkan_13_features = vk::PhysicalDeviceVulkan13Features::default()
             .dynamic_rendering(device_features.dynamic_rendering)
             .synchronization2(device_features.synchronization2);
 
-        let mut features = vk::PhysicalDeviceFeatures2::builder()
+        let mut features = vk::PhysicalDeviceFeatures2::default()
             .features(features)
             .push_next(&mut vulkan_12_features)
             .push_next(&mut vulkan_13_features);
@@ -75,7 +74,7 @@ impl Device {
                 .push_next(&mut ray_tracing_feature);
         }
 
-        let device_create_info = vk::DeviceCreateInfo::builder()
+        let device_create_info = vk::DeviceCreateInfo::default()
             .queue_create_infos(&queue_create_infos)
             .enabled_extension_names(&device_extensions_ptrs)
             .push_next(&mut features);

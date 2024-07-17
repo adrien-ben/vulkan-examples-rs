@@ -103,23 +103,20 @@ impl ShaderBindingTable {
         let address = buffer.get_device_address();
 
         // see https://nvpro-samples.github.io/vk_raytracing_tutorial_KHR/Images/sbt_0.png
-        let raygen_region = vk::StridedDeviceAddressRegionKHR::builder()
+        let raygen_region = vk::StridedDeviceAddressRegionKHR::default()
             .device_address(address)
             .size(raygen_region_size as _)
-            .stride(raygen_region_size as _)
-            .build();
+            .stride(raygen_region_size as _);
 
-        let miss_region = vk::StridedDeviceAddressRegionKHR::builder()
+        let miss_region = vk::StridedDeviceAddressRegionKHR::default()
             .device_address(address + raygen_region.size)
             .size(miss_region_size as _)
-            .stride(aligned_handle_size as _)
-            .build();
+            .stride(aligned_handle_size as _);
 
-        let hit_region = vk::StridedDeviceAddressRegionKHR::builder()
+        let hit_region = vk::StridedDeviceAddressRegionKHR::default()
             .device_address(address + raygen_region.size + miss_region.size)
             .size(hit_region_size as _)
-            .stride(aligned_handle_size as _)
-            .build();
+            .stride(aligned_handle_size as _);
 
         Ok(Self {
             _buffer: buffer,

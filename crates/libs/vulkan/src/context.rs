@@ -6,7 +6,7 @@ use gpu_allocator::{
     vulkan::{Allocator, AllocatorCreateDesc},
     AllocatorDebugSettings,
 };
-use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
 use crate::{
     device::{Device, DeviceFeatures},
@@ -34,8 +34,8 @@ pub struct Context {
 }
 
 pub struct ContextBuilder<'a> {
-    window_handle: &'a dyn HasRawWindowHandle,
-    display_handle: &'a dyn HasRawDisplayHandle,
+    window_handle: &'a dyn HasWindowHandle,
+    display_handle: &'a dyn HasDisplayHandle,
     vulkan_version: Version,
     app_name: &'a str,
     required_instance_extensions: &'a [&'a str],
@@ -46,8 +46,8 @@ pub struct ContextBuilder<'a> {
 
 impl<'a> ContextBuilder<'a> {
     pub fn new(
-        window_handle: &'a dyn HasRawWindowHandle,
-        display_handle: &'a dyn HasRawDisplayHandle,
+        window_handle: &'a dyn HasWindowHandle,
+        display_handle: &'a dyn HasDisplayHandle,
     ) -> Self {
         Self {
             window_handle,

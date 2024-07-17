@@ -22,18 +22,20 @@ impl AccelerationStructure {
         as_ranges: &[vk::AccelerationStructureBuildRangeInfoKHR],
         max_primitive_counts: &[u32],
     ) -> Result<Self> {
-        let build_geo_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
+        let build_geo_info = vk::AccelerationStructureBuildGeometryInfoKHR::default()
             .ty(level)
             .flags(vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE)
             .geometries(as_geometry);
 
-        let build_size = unsafe {
+        let mut build_size = vk::AccelerationStructureBuildSizesInfoKHR::default();
+        unsafe {
             ray_tracing
                 .acceleration_structure_fn
                 .get_acceleration_structure_build_sizes(
                     vk::AccelerationStructureBuildTypeKHR::DEVICE,
                     &build_geo_info,
                     max_primitive_counts,
+                    &mut build_size,
                 )
         };
 
@@ -44,7 +46,7 @@ impl AccelerationStructure {
             build_size.acceleration_structure_size,
         )?;
 
-        let create_info = vk::AccelerationStructureCreateInfoKHR::builder()
+        let create_info = vk::AccelerationStructureCreateInfoKHR::default()
             .buffer(buffer.inner)
             .size(build_size.acceleration_structure_size)
             .ty(level);
@@ -61,7 +63,7 @@ impl AccelerationStructure {
         )?;
         let scratch_buffer_address = scratch_buffer.get_device_address();
 
-        let build_geo_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
+        let build_geo_info = vk::AccelerationStructureBuildGeometryInfoKHR::default()
             .ty(level)
             .mode(vk::BuildAccelerationStructureModeKHR::BUILD)
             .flags(vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE)
@@ -76,7 +78,7 @@ impl AccelerationStructure {
         })?;
 
         let address_info =
-            vk::AccelerationStructureDeviceAddressInfoKHR::builder().acceleration_structure(inner);
+            vk::AccelerationStructureDeviceAddressInfoKHR::default().acceleration_structure(inner);
         let address = unsafe {
             ray_tracing
                 .acceleration_structure_fn

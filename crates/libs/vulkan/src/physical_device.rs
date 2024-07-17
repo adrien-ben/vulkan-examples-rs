@@ -79,11 +79,11 @@ impl PhysicalDevice {
         let mut ray_tracing_feature = vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::default();
         let mut acceleration_struct_feature =
             vk::PhysicalDeviceAccelerationStructureFeaturesKHR::default();
-        let mut features12 = vk::PhysicalDeviceVulkan12Features::builder()
+        let mut features12 = vk::PhysicalDeviceVulkan12Features::default()
             .runtime_descriptor_array(true)
             .buffer_device_address(true);
         let mut features13 = vk::PhysicalDeviceVulkan13Features::default();
-        let mut features = vk::PhysicalDeviceFeatures2::builder()
+        let mut features = vk::PhysicalDeviceFeatures2::default()
             .push_next(&mut ray_tracing_feature)
             .push_next(&mut acceleration_struct_feature)
             .push_next(&mut features12)

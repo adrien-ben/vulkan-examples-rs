@@ -64,21 +64,21 @@ impl Queue {
         fence: &Fence,
     ) -> Result<()> {
         let wait_semaphore_submit_info = wait_semaphore.map(|s| {
-            vk::SemaphoreSubmitInfo::builder()
+            vk::SemaphoreSubmitInfo::default()
                 .semaphore(s.semaphore.inner)
                 .stage_mask(s.stage_mask)
         });
 
         let signal_semaphore_submit_info = signal_semaphore.map(|s| {
-            vk::SemaphoreSubmitInfo::builder()
+            vk::SemaphoreSubmitInfo::default()
                 .semaphore(s.semaphore.inner)
                 .stage_mask(s.stage_mask)
         });
 
         let cmd_buffer_submit_info =
-            vk::CommandBufferSubmitInfo::builder().command_buffer(command_buffer.inner);
+            vk::CommandBufferSubmitInfo::default().command_buffer(command_buffer.inner);
 
-        let submit_info = vk::SubmitInfo2::builder()
+        let submit_info = vk::SubmitInfo2::default()
             .command_buffer_infos(std::slice::from_ref(&cmd_buffer_submit_info));
 
         let submit_info = match wait_semaphore_submit_info.as_ref() {

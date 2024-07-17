@@ -23,13 +23,12 @@ impl ComputePipeline {
     ) -> Result<Self> {
         let entry_point_name = CString::new("main").unwrap();
         let shader_module = ShaderModule::from_bytes(device.clone(), create_info.shader_source)?;
-        let shader_stage_info = vk::PipelineShaderStageCreateInfo::builder()
+        let shader_stage_info = vk::PipelineShaderStageCreateInfo::default()
             .stage(vk::ShaderStageFlags::COMPUTE)
             .module(shader_module.inner)
-            .name(&entry_point_name)
-            .build();
+            .name(&entry_point_name);
 
-        let pipeline_info = vk::ComputePipelineCreateInfo::builder()
+        let pipeline_info = vk::ComputePipelineCreateInfo::default()
             .stage(shader_stage_info)
             .layout(layout.inner);
 

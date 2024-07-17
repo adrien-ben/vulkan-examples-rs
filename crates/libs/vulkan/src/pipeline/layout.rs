@@ -20,7 +20,7 @@ impl PipelineLayout {
             .map(|l| l.inner)
             .collect::<Vec<_>>();
 
-        let pipe_layout_info = vk::PipelineLayoutCreateInfo::builder().set_layouts(&layouts);
+        let pipe_layout_info = vk::PipelineLayoutCreateInfo::default().set_layouts(&layouts);
         let inner = unsafe {
             device
                 .inner

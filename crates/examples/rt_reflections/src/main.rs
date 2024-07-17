@@ -428,7 +428,7 @@ fn create_model(context: &Context) -> Result<Model> {
 
     // Dummy sampler
     if samplers.is_empty() {
-        let sampler_info = vk::SamplerCreateInfo::builder();
+        let sampler_info = vk::SamplerCreateInfo::default();
         let sampler = context.create_sampler(&sampler_info)?;
         samplers.push(sampler);
     }
@@ -456,7 +456,7 @@ fn create_model(context: &Context) -> Result<Model> {
     })
 }
 
-fn map_gltf_sampler<'a>(sampler: &gltf::Sampler) -> vk::SamplerCreateInfoBuilder<'a> {
+fn map_gltf_sampler<'a>(sampler: &gltf::Sampler) -> vk::SamplerCreateInfo<'a> {
     let mag_filter = match sampler.mag_filter {
         gltf::MagFilter::Linear => vk::Filter::LINEAR,
         gltf::MagFilter::Nearest => vk::Filter::NEAREST,
@@ -471,7 +471,7 @@ fn map_gltf_sampler<'a>(sampler: &gltf::Sampler) -> vk::SamplerCreateInfoBuilder
         | gltf::MinFilter::NearestMipmapNearest => vk::Filter::NEAREST,
     };
 
-    vk::SamplerCreateInfo::builder()
+    vk::SamplerCreateInfo::default()
         .mag_filter(mag_filter)
         .min_filter(min_filter)
 }
@@ -483,7 +483,7 @@ fn create_bottom_as(context: &mut Context, model: &Model) -> Result<BottomAS> {
 
     let transform_buffer_addr = model.transform_buffer.get_device_address();
 
-    let as_geo_triangles_data = vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
+    let as_geo_triangles_data = vk::AccelerationStructureGeometryTrianglesDataKHR::default()
         .vertex_format(vk::Format::R32G32B32_SFLOAT)
         .vertex_data(vk::DeviceOrHostAddressConstKHR {
             device_address: vertex_buffer_addr,
@@ -496,8 +496,7 @@ fn create_bottom_as(context: &mut Context, model: &Model) -> Result<BottomAS> {
         })
         .transform_data(vk::DeviceOrHostAddressConstKHR {
             device_address: transform_buffer_addr,
-        })
-        .build();
+        });
 
     let mut geometry_infos = vec![];
     let mut as_geometries = vec![];
@@ -522,22 +521,20 @@ fn create_bottom_as(context: &mut Context, model: &Model) -> Result<BottomAS> {
         });
 
         as_geometries.push(
-            vk::AccelerationStructureGeometryKHR::builder()
+            vk::AccelerationStructureGeometryKHR::default()
                 .geometry_type(vk::GeometryTypeKHR::TRIANGLES)
                 .flags(vk::GeometryFlagsKHR::OPAQUE)
                 .geometry(vk::AccelerationStructureGeometryDataKHR {
                     triangles: as_geo_triangles_data,
-                })
-                .build(),
+                }),
         );
 
         as_ranges.push(
-            vk::AccelerationStructureBuildRangeInfoKHR::builder()
+            vk::AccelerationStructureBuildRangeInfoKHR::default()
                 .first_vertex(mesh.vertex_offset)
                 .primitive_count(primitive_count)
                 .primitive_offset(mesh.index_offset * size_of::<u32>() as u32)
-                .transform_offset((node_index * size_of::<vk::TransformMatrixKHR>()) as u32)
-                .build(),
+                .transform_offset((node_index * size_of::<vk::TransformMatrixKHR>()) as u32),
         );
 
         max_primitive_counts.push(primitive_count)
@@ -589,25 +586,22 @@ fn create_top_as(context: &mut Context, bottom_as: &BottomAS) -> Result<TopAS> {
     )?;
     let instance_buffer_addr = instance_buffer.get_device_address();
 
-    let as_struct_geo = vk::AccelerationStructureGeometryKHR::builder()
+    let as_struct_geo = vk::AccelerationStructureGeometryKHR::default()
         .geometry_type(vk::GeometryTypeKHR::INSTANCES)
         .flags(vk::GeometryFlagsKHR::OPAQUE)
         .geometry(vk::AccelerationStructureGeometryDataKHR {
-            instances: vk::AccelerationStructureGeometryInstancesDataKHR::builder()
+            instances: vk::AccelerationStructureGeometryInstancesDataKHR::default()
                 .array_of_pointers(false)
                 .data(vk::DeviceOrHostAddressConstKHR {
                     device_address: instance_buffer_addr,
-                })
-                .build(),
-        })
-        .build();
+                }),
+        });
 
-    let as_ranges = vk::AccelerationStructureBuildRangeInfoKHR::builder()
+    let as_ranges = vk::AccelerationStructureBuildRangeInfoKHR::default()
         .first_vertex(0)
         .primitive_count(1)
         .primitive_offset(0)
-        .transform_offset(0)
-        .build();
+        .transform_offset(0);
 
     let inner =
         context.create_top_level_acceleration_structure(&[as_struct_geo], &[as_ranges], &[1])?;
@@ -621,54 +615,47 @@ fn create_top_as(context: &mut Context, bottom_as: &BottomAS) -> Result<TopAS> {
 fn create_pipeline(context: &Context, model: &Model) -> Result<PipelineRes> {
     // descriptor and pipeline layouts
     let static_layout_bindings = [
-        vk::DescriptorSetLayoutBinding::builder()
+        vk::DescriptorSetLayoutBinding::default()
             .binding(0)
             .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
             .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR | vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-            .build(),
-        vk::DescriptorSetLayoutBinding::builder()
+            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR | vk::ShaderStageFlags::CLOSEST_HIT_KHR),
+        vk::DescriptorSetLayoutBinding::default()
             .binding(2)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
             .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR | vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-            .build(),
+            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR | vk::ShaderStageFlags::CLOSEST_HIT_KHR),
         // Vertex buffer
-        vk::DescriptorSetLayoutBinding::builder()
+        vk::DescriptorSetLayoutBinding::default()
             .binding(3)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-            .build(),
+            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR),
         //Index buffer
-        vk::DescriptorSetLayoutBinding::builder()
+        vk::DescriptorSetLayoutBinding::default()
             .binding(4)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-            .build(),
+            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR),
         // Geometry info buffer
-        vk::DescriptorSetLayoutBinding::builder()
+        vk::DescriptorSetLayoutBinding::default()
             .binding(5)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-            .build(),
+            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR),
         // Textures
-        vk::DescriptorSetLayoutBinding::builder()
+        vk::DescriptorSetLayoutBinding::default()
             .binding(6)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .descriptor_count(model.images.len() as _)
-            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
-            .build(),
+            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR),
     ];
 
-    let dynamic_layout_bindings = [vk::DescriptorSetLayoutBinding::builder()
+    let dynamic_layout_bindings = [vk::DescriptorSetLayoutBinding::default()
         .binding(1)
         .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
         .descriptor_count(1)
-        .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
-        .build()];
+        .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)];
 
     let static_dsl = context.create_descriptor_set_layout(&static_layout_bindings)?;
     let dynamic_dsl = context.create_descriptor_set_layout(&dynamic_layout_bindings)?;
@@ -727,26 +714,21 @@ fn create_descriptor_sets(
     let set_count = storage_imgs.len() as u32;
 
     let pool_sizes = [
-        vk::DescriptorPoolSize::builder()
+        vk::DescriptorPoolSize::default()
             .ty(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
-            .descriptor_count(1)
-            .build(),
-        vk::DescriptorPoolSize::builder()
+            .descriptor_count(1),
+        vk::DescriptorPoolSize::default()
             .ty(vk::DescriptorType::STORAGE_IMAGE)
-            .descriptor_count(set_count)
-            .build(),
-        vk::DescriptorPoolSize::builder()
+            .descriptor_count(set_count),
+        vk::DescriptorPoolSize::default()
             .ty(vk::DescriptorType::UNIFORM_BUFFER)
-            .descriptor_count(1)
-            .build(),
-        vk::DescriptorPoolSize::builder()
+            .descriptor_count(1),
+        vk::DescriptorPoolSize::default()
             .ty(vk::DescriptorType::STORAGE_BUFFER)
-            .descriptor_count(3)
-            .build(),
-        vk::DescriptorPoolSize::builder()
+            .descriptor_count(3),
+        vk::DescriptorPoolSize::default()
             .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .descriptor_count(model.images.len() as _)
-            .build(),
+            .descriptor_count(model.images.len() as _),
     ];
 
     let pool = context.create_descriptor_pool(set_count + 1, &pool_sizes)?;

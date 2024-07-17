@@ -685,30 +685,26 @@ fn create_skybox_pass(
     color_attachment_format: vk::Format,
 ) -> Result<Pass> {
     let bindings = [
-        vk::DescriptorSetLayoutBinding::builder()
+        vk::DescriptorSetLayoutBinding::default()
             .binding(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
             .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::VERTEX)
-            .build(),
-        vk::DescriptorSetLayoutBinding::builder()
+            .stage_flags(vk::ShaderStageFlags::VERTEX),
+        vk::DescriptorSetLayoutBinding::default()
             .binding(1)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
-            .build(),
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT),
     ];
     let dsl = context.create_descriptor_set_layout(&bindings)?;
 
     let pool_sizes = [
-        vk::DescriptorPoolSize::builder()
+        vk::DescriptorPoolSize::default()
             .ty(vk::DescriptorType::UNIFORM_BUFFER)
-            .descriptor_count(1)
-            .build(),
-        vk::DescriptorPoolSize::builder()
+            .descriptor_count(1),
+        vk::DescriptorPoolSize::default()
             .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .descriptor_count(1)
-            .build(),
+            .descriptor_count(1),
     ];
 
     let descriptor_pool = context.create_descriptor_pool(2, &pool_sizes)?;
@@ -853,30 +849,26 @@ fn create_tonemap_pass(
     color_attachment_format: vk::Format,
 ) -> Result<Pass> {
     let bindings = [
-        vk::DescriptorSetLayoutBinding::builder()
+        vk::DescriptorSetLayoutBinding::default()
             .binding(0)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
-            .build(),
-        vk::DescriptorSetLayoutBinding::builder()
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT),
+        vk::DescriptorSetLayoutBinding::default()
             .binding(1)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
             .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
-            .build(),
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT),
     ];
     let dsl = context.create_descriptor_set_layout(&bindings)?;
 
     let pool_sizes = [
-        vk::DescriptorPoolSize::builder()
+        vk::DescriptorPoolSize::default()
             .ty(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .descriptor_count(1)
-            .build(),
-        vk::DescriptorPoolSize::builder()
+            .descriptor_count(1),
+        vk::DescriptorPoolSize::default()
             .ty(vk::DescriptorType::UNIFORM_BUFFER)
-            .descriptor_count(1)
-            .build(),
+            .descriptor_count(1),
     ];
 
     let descriptor_pool = context.create_descriptor_pool(1, &pool_sizes)?;
@@ -960,18 +952,16 @@ fn create_calibration_pass(
     ubo: &Buffer,
     color_attachment_format: vk::Format,
 ) -> Result<Pass> {
-    let bindings = [vk::DescriptorSetLayoutBinding::builder()
+    let bindings = [vk::DescriptorSetLayoutBinding::default()
         .binding(0)
         .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
         .descriptor_count(1)
-        .stage_flags(vk::ShaderStageFlags::FRAGMENT)
-        .build()];
+        .stage_flags(vk::ShaderStageFlags::FRAGMENT)];
     let dsl = context.create_descriptor_set_layout(&bindings)?;
 
-    let pool_sizes = [vk::DescriptorPoolSize::builder()
+    let pool_sizes = [vk::DescriptorPoolSize::default()
         .ty(vk::DescriptorType::UNIFORM_BUFFER)
-        .descriptor_count(1)
-        .build()];
+        .descriptor_count(1)];
 
     let descriptor_pool = context.create_descriptor_pool(1, &pool_sizes)?;
     let descriptor_set = descriptor_pool.allocate_set(&dsl)?;
