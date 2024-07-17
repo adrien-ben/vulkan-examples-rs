@@ -8,7 +8,10 @@ pub use image::*;
 pub use material::*;
 pub use texture::*;
 
-use std::{collections::HashMap, path::Path};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    path::Path,
+};
 
 use glam::{vec4, Vec2, Vec4};
 use gltf::{Primitive, Semantic};
@@ -63,7 +66,7 @@ pub fn load_file<P: AsRef<Path>>(path: P) -> Result<Model> {
         for primitive in mesh.primitives().filter(is_primitive_supported) {
             let og_index = (mesh.index(), primitive.index());
 
-            if mesh_index_redirect.get(&og_index).is_none() {
+            if let Entry::Vacant(e) = mesh_index_redirect.entry(og_index) {
                 let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
 
                 // vertices
@@ -111,7 +114,7 @@ pub fn load_file<P: AsRef<Path>>(path: P) -> Result<Model> {
 
                 let mesh_index = meshes.len();
 
-                mesh_index_redirect.insert(og_index, mesh_index);
+                e.insert(mesh_index);
 
                 meshes.push(Mesh {
                     vertex_offset,

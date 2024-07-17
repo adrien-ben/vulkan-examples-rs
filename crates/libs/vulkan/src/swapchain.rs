@@ -71,7 +71,7 @@ impl Swapchain {
 
         // Swapchain extent
         let extent = {
-            if capabilities.current_extent.width != std::u32::MAX {
+            if capabilities.current_extent.width != u32::MAX {
                 capabilities.current_extent
             } else {
                 let min = capabilities.min_image_extent;
@@ -188,7 +188,7 @@ impl Swapchain {
 
         // Swapchain extent
         let extent = {
-            if capabilities.current_extent.width != std::u32::MAX {
+            if capabilities.current_extent.width != u32::MAX {
                 capabilities.current_extent
             } else {
                 let min = capabilities.min_image_extent;

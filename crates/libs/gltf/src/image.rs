@@ -59,8 +59,6 @@ impl<'a> Iterator for PixelIter<'a> {
     type Item = [u8; 4];
 
     fn next(&mut self) -> Option<Self::Item> {
-        use std::u8::MAX;
-
         if self.position == self.pixels.len() {
             return None;
         }
@@ -68,18 +66,18 @@ impl<'a> Iterator for PixelIter<'a> {
         let pixel = match self.format {
             Format::R8 => {
                 let r = self.pixels[self.position];
-                Some([r, 0, 0, MAX])
+                Some([r, 0, 0, u8::MAX])
             }
             Format::R8G8 => {
                 let r = self.pixels[self.position];
                 let g = self.pixels[self.position + 1];
-                Some([r, g, 0, MAX])
+                Some([r, g, 0, u8::MAX])
             }
             Format::R8G8B8 => {
                 let r = self.pixels[self.position];
                 let g = self.pixels[self.position + 1];
                 let b = self.pixels[self.position + 2];
-                Some([r, g, b, MAX])
+                Some([r, g, b, u8::MAX])
             }
             Format::R8G8B8A8 => {
                 let r = self.pixels[self.position];

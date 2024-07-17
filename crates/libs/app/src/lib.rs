@@ -426,10 +426,9 @@ impl<B: App> BaseApp<B> {
         frame_stats.set_gpu_time_time(gpu_time);
         frame_stats.tick();
 
-        let next_image_result = self.swapchain.acquire_next_image(
-            std::u64::MAX,
-            self.in_flight_frames.image_available_semaphore(),
-        );
+        let next_image_result = self
+            .swapchain
+            .acquire_next_image(u64::MAX, self.in_flight_frames.image_available_semaphore());
         let image_index = match next_image_result {
             Ok(AcquiredImage { index, .. }) => index as usize,
             Err(err) => match err.downcast_ref::<vk::Result>() {

@@ -48,7 +48,7 @@ impl Fence {
     }
 
     pub fn wait(&self, timeout: Option<u64>) -> Result<()> {
-        let timeout = timeout.unwrap_or(std::u64::MAX);
+        let timeout = timeout.unwrap_or(u64::MAX);
 
         unsafe {
             self.device
