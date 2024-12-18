@@ -5,7 +5,7 @@ pub struct Material {
     pub metallic_factor: f32,
 }
 
-impl<'a> From<gltf::Material<'a>> for Material {
+impl From<gltf::Material<'_>> for Material {
     fn from(material: gltf::Material) -> Self {
         let pbr = material.pbr_metallic_roughness();
         Self {

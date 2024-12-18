@@ -35,7 +35,7 @@ pub enum WrapMode {
     Repeat,
 }
 
-impl<'a> From<gltf::Texture<'a>> for Texture {
+impl From<gltf::Texture<'_>> for Texture {
     fn from(texture: gltf::Texture) -> Self {
         Self {
             image_index: texture.source().index(),

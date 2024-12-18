@@ -42,7 +42,7 @@ struct Reflections {
 impl App for Reflections {
     type Gui = Gui;
 
-    fn new(base: &mut BaseApp<Self>) -> Result<Self> {
+    fn new(base: &mut BaseApp) -> Result<Self> {
         let context = &mut base.context;
 
         let ubo_buffer = context.create_buffer(
@@ -87,7 +87,7 @@ impl App for Reflections {
 
     fn update(
         &mut self,
-        base: &mut BaseApp<Self>,
+        base: &mut BaseApp,
         gui: &mut <Self as App>::Gui,
         _image_index: usize,
         _: Duration,
@@ -126,7 +126,7 @@ impl App for Reflections {
 
     fn record_raytracing_commands(
         &self,
-        base: &BaseApp<Self>,
+        base: &BaseApp,
         buffer: &CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
@@ -151,7 +151,7 @@ impl App for Reflections {
         Ok(())
     }
 
-    fn on_recreate_swapchain(&mut self, base: &BaseApp<Self>) -> Result<()> {
+    fn on_recreate_swapchain(&mut self, base: &BaseApp) -> Result<()> {
         base.storage_images
             .iter()
             .enumerate()
@@ -178,7 +178,7 @@ struct Gui {
 }
 
 impl app::Gui for Gui {
-    fn new<A: App>(_: &BaseApp<A>) -> Result<Self> {
+    fn new(_: &BaseApp) -> Result<Self> {
         Ok(Gui {
             light: Light {
                 direction: [-2.0, -1.0, -2.0],

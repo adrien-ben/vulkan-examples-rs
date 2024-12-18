@@ -26,7 +26,7 @@ struct Mandelbrot {
 impl App for Mandelbrot {
     type Gui = ();
 
-    fn new(base: &mut BaseApp<Self>) -> Result<Self> {
+    fn new(base: &mut BaseApp) -> Result<Self> {
         let context = &mut base.context;
 
         let vertex_buffer = create_vertex_buffer(context)?;
@@ -42,13 +42,13 @@ impl App for Mandelbrot {
         })
     }
 
-    fn on_recreate_swapchain(&mut self, _: &BaseApp<Self>) -> Result<()> {
+    fn on_recreate_swapchain(&mut self, _: &BaseApp) -> Result<()> {
         Ok(())
     }
 
     fn update(
         &mut self,
-        _: &mut BaseApp<Self>,
+        _: &mut BaseApp,
         _: &mut <Self as App>::Gui,
         _: usize,
         _: Duration,
@@ -56,7 +56,7 @@ impl App for Mandelbrot {
         Ok(())
     }
 
-    fn record_raster_commands(&self, base: &BaseApp<Self>, image_index: usize) -> Result<()> {
+    fn record_raster_commands(&self, base: &BaseApp, image_index: usize) -> Result<()> {
         let buffer = &base.command_buffers[image_index];
 
         buffer.begin_rendering(

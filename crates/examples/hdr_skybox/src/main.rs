@@ -71,7 +71,7 @@ struct Skybox {
 impl App for Skybox {
     type Gui = Gui;
 
-    fn new(base: &mut BaseApp<Self>) -> Result<Self> {
+    fn new(base: &mut BaseApp) -> Result<Self> {
         let context = &mut base.context;
 
         // skybox
@@ -144,7 +144,7 @@ impl App for Skybox {
         })
     }
 
-    fn on_recreate_swapchain(&mut self, base: &BaseApp<Self>) -> Result<()> {
+    fn on_recreate_swapchain(&mut self, base: &BaseApp) -> Result<()> {
         // rebuilt framebuffers
         self.skybox_pass_framebuffer =
             Texture::framebuffer(&base.context, base.swapchain.extent, HDR_FRAMEBUFFER_FORMAT)?;
@@ -184,7 +184,7 @@ impl App for Skybox {
 
     fn update(
         &mut self,
-        base: &mut BaseApp<Self>,
+        base: &mut BaseApp,
         ui: &mut <Self as App>::Gui,
         _: usize,
         _: Duration,
@@ -262,7 +262,7 @@ impl App for Skybox {
         Ok(())
     }
 
-    fn record_raster_commands(&self, base: &BaseApp<Self>, image_index: usize) -> Result<()> {
+    fn record_raster_commands(&self, base: &BaseApp, image_index: usize) -> Result<()> {
         match self.app_mode {
             AppMode::Scene => {
                 // skybox pass outputs to an hdr framebuffer the used for tonemapping
@@ -407,7 +407,7 @@ struct Gui {
 }
 
 impl app::Gui for Gui {
-    fn new<A: App>(base: &BaseApp<A>) -> Result<Self> {
+    fn new(base: &BaseApp) -> Result<Self> {
         let supports_hdr = base
             .context
             .supported_surface_formats()

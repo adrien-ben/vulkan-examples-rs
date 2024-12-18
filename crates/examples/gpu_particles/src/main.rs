@@ -51,7 +51,7 @@ struct Particles {
 impl App for Particles {
     type Gui = Gui;
 
-    fn new(base: &mut BaseApp<Self>) -> Result<Self> {
+    fn new(base: &mut BaseApp) -> Result<Self> {
         let context = &mut base.context;
 
         let particles_buffer = create_particle_buffer(context)?;
@@ -183,7 +183,7 @@ impl App for Particles {
 
     fn update(
         &mut self,
-        base: &mut BaseApp<Self>,
+        base: &mut BaseApp,
         gui: &mut <Self as App>::Gui,
         _: usize,
         delta_time: Duration,
@@ -218,7 +218,7 @@ impl App for Particles {
         Ok(())
     }
 
-    fn record_raster_commands(&self, base: &BaseApp<Self>, image_index: usize) -> Result<()> {
+    fn record_raster_commands(&self, base: &BaseApp, image_index: usize) -> Result<()> {
         let buffer = &base.command_buffers[image_index];
 
         buffer.bind_compute_pipeline(&self.compute_pipeline);
@@ -263,7 +263,7 @@ impl App for Particles {
         Ok(())
     }
 
-    fn on_recreate_swapchain(&mut self, _: &BaseApp<Self>) -> Result<()> {
+    fn on_recreate_swapchain(&mut self, _: &BaseApp) -> Result<()> {
         Ok(())
     }
 }
@@ -281,7 +281,7 @@ struct Gui {
 }
 
 impl app::Gui for Gui {
-    fn new<A: App>(_: &BaseApp<A>) -> Result<Self> {
+    fn new(_: &BaseApp) -> Result<Self> {
         Ok(Gui {
             particle_count: MAX_PARTICLE_COUNT / 20,
             particle_size: MIN_PARTICLE_SIZE,

@@ -55,7 +55,7 @@ impl<'a> PixelIter<'a> {
     }
 }
 
-impl<'a> Iterator for PixelIter<'a> {
+impl Iterator for PixelIter<'_> {
     type Item = [u8; 4];
 
     fn next(&mut self) -> Option<Self::Item> {

@@ -58,7 +58,7 @@ struct Triangle {
 impl App for Triangle {
     type Gui = Gui;
 
-    fn new(base: &mut BaseApp<Self>) -> Result<Self> {
+    fn new(base: &mut BaseApp) -> Result<Self> {
         let context = &mut base.context;
         base.camera.position = Vec3::new(1.6, 0.06, 1.95);
         base.camera.direction = -base.camera.position;
@@ -138,7 +138,7 @@ impl App for Triangle {
         })
     }
 
-    fn on_recreate_swapchain(&mut self, base: &BaseApp<Self>) -> Result<()> {
+    fn on_recreate_swapchain(&mut self, base: &BaseApp) -> Result<()> {
         self.depth_buffer = Texture::create_framebuffer(
             &base.context,
             vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT,
@@ -198,7 +198,7 @@ impl App for Triangle {
 
     fn update(
         &mut self,
-        base: &mut BaseApp<Self>,
+        base: &mut BaseApp,
         ui: &mut <Self as App>::Gui,
         _: usize,
         _: Duration,
@@ -216,7 +216,7 @@ impl App for Triangle {
         Ok(())
     }
 
-    fn record_raster_commands(&self, base: &BaseApp<Self>, image_index: usize) -> Result<()> {
+    fn record_raster_commands(&self, base: &BaseApp, image_index: usize) -> Result<()> {
         let buffer = &base.command_buffers[image_index];
 
         buffer.pipeline_image_barriers(&[
@@ -382,7 +382,7 @@ struct Gui {
 }
 
 impl app::Gui for Gui {
-    fn new<A: App>(_: &BaseApp<A>) -> Result<Self> {
+    fn new(_: &BaseApp) -> Result<Self> {
         Ok(Self {
             instances: vec![
                 InstanceUbo::new([1.0, 1.0, 1.0, 0.5], [0.0, 0.0, 0.0]),

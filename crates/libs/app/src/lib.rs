@@ -16,7 +16,6 @@ use gui::{
 };
 use std::{
     fs::OpenOptions,
-    marker::PhantomData,
     time::{Duration, Instant},
 };
 use vulkan::*;
@@ -30,8 +29,7 @@ use winit::{
 
 const IN_FLIGHT_FRAMES: u32 = 2;
 
-pub struct BaseApp<B: App> {
-    phantom: PhantomData<B>,
+pub struct BaseApp {
     raytracing_enabled: bool,
     pub swapchain: Swapchain,
     pub command_pool: CommandPool,
@@ -58,11 +56,11 @@ pub struct AppConfig<'a, 'b> {
 pub trait App: Sized {
     type Gui: Gui;
 
-    fn new(base: &mut BaseApp<Self>) -> Result<Self>;
+    fn new(base: &mut BaseApp) -> Result<Self>;
 
     fn update(
         &mut self,
-        base: &mut BaseApp<Self>,
+        base: &mut BaseApp,
         gui: &mut Self::Gui,
         image_index: usize,
         delta_time: Duration,
@@ -70,7 +68,7 @@ pub trait App: Sized {
 
     fn record_raytracing_commands(
         &self,
-        base: &BaseApp<Self>,
+        base: &BaseApp,
         buffer: &CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
@@ -82,7 +80,7 @@ pub trait App: Sized {
         Ok(())
     }
 
-    fn record_raster_commands(&self, base: &BaseApp<Self>, image_index: usize) -> Result<()> {
+    fn record_raster_commands(&self, base: &BaseApp, image_index: usize) -> Result<()> {
         // prevents reports of unused parameters without needing to use #[allow]
         let _ = base;
         let _ = image_index;
@@ -90,17 +88,17 @@ pub trait App: Sized {
         Ok(())
     }
 
-    fn on_recreate_swapchain(&mut self, base: &BaseApp<Self>) -> Result<()>;
+    fn on_recreate_swapchain(&mut self, base: &BaseApp) -> Result<()>;
 }
 
 pub trait Gui: Sized {
-    fn new<A: App>(base: &BaseApp<A>) -> Result<Self>;
+    fn new(base: &BaseApp) -> Result<Self>;
 
     fn build(&mut self, ui: &egui::Context);
 }
 
 impl Gui for () {
-    fn new<A: App>(base: &BaseApp<A>) -> Result<Self> {
+    fn new(base: &BaseApp) -> Result<Self> {
         // prevents reports of unused parameters without needing to use #[allow]
         let _ = base;
 
@@ -278,7 +276,7 @@ fn create_window(app_name: &str, width: u32, height: u32) -> Result<(Window, Eve
     Ok((window, events_loop))
 }
 
-impl<B: App> BaseApp<B> {
+impl BaseApp {
     fn new(window: &Window, app_name: &str, app_config: AppConfig) -> Result<Self> {
         log::info!("Create application");
 
@@ -347,7 +345,6 @@ impl<B: App> BaseApp<B> {
             GuiContext::new(&context, swapchain.format, window, IN_FLIGHT_FRAMES as _)?;
 
         Ok(Self {
-            phantom: PhantomData,
             raytracing_enabled: enable_raytracing,
             context,
             command_pool,
@@ -406,7 +403,7 @@ impl<B: App> BaseApp<B> {
         self.context.device_wait_idle()
     }
 
-    fn draw(
+    fn draw<B: App>(
         &mut self,
         window: &Window,
         base_app: &mut B,
@@ -545,7 +542,7 @@ impl<B: App> BaseApp<B> {
         }
     }
 
-    fn record_command_buffer(
+    fn record_command_buffer<B: App>(
         &mut self,
         image_index: usize,
         base_app: &B,

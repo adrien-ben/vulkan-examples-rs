@@ -33,7 +33,7 @@ struct Triangle {
 impl App for Triangle {
     type Gui = ();
 
-    fn new(base: &mut BaseApp<Self>) -> Result<Self> {
+    fn new(base: &mut BaseApp) -> Result<Self> {
         let context = &mut base.context;
 
         let bottom_as = create_bottom_as(context)?;
@@ -62,7 +62,7 @@ impl App for Triangle {
 
     fn update(
         &mut self,
-        _: &mut BaseApp<Self>,
+        _: &mut BaseApp,
         _: &mut <Self as App>::Gui,
         _: usize,
         _: Duration,
@@ -72,7 +72,7 @@ impl App for Triangle {
 
     fn record_raytracing_commands(
         &self,
-        base: &BaseApp<Self>,
+        base: &BaseApp,
         buffer: &CommandBuffer,
         image_index: usize,
     ) -> Result<()> {
@@ -97,7 +97,7 @@ impl App for Triangle {
         Ok(())
     }
 
-    fn on_recreate_swapchain(&mut self, base: &BaseApp<Self>) -> Result<()> {
+    fn on_recreate_swapchain(&mut self, base: &BaseApp) -> Result<()> {
         base.storage_images
             .iter()
             .enumerate()
