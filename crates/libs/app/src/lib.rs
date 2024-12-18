@@ -20,11 +20,12 @@ use std::{
 };
 use vulkan::*;
 use winit::{
+    application::ApplicationHandler,
     dpi::PhysicalSize,
-    event::{ElementState, Event, KeyEvent, MouseButton, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
+    event::{ElementState, KeyEvent, MouseButton, WindowEvent},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     keyboard::{KeyCode, PhysicalKey},
-    window::{Window, WindowBuilder},
+    window::Window,
 };
 
 const IN_FLIGHT_FRAMES: u32 = 2;
@@ -46,7 +47,7 @@ pub struct BaseApp {
     requested_swapchain_format: Option<vk::SurfaceFormatKHR>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct AppConfig<'a, 'b> {
     pub enable_raytracing: bool,
     pub required_instance_extensions: &'a [&'b str],
@@ -132,107 +133,174 @@ pub fn run<A: App + 'static>(
     app_config: AppConfig,
 ) -> Result<()> {
     let log_to_file = std::env::args().any(|a| "--log-to-file" == a);
-
     setup_logs(app_name, log_to_file);
 
-    let (window, event_loop) = create_window(app_name, width, height)?;
-    let mut base_app = BaseApp::new(&window, app_name, app_config)?;
-    let mut ui = A::Gui::new(&base_app)?;
-    let mut app = A::new(&mut base_app)?;
+    let mut wrapper = AppWrapper::<A> {
+        app_name,
+        width,
+        height,
+        app_config,
 
-    let mut controls = Controls::default();
-    let mut is_swapchain_dirty = false;
-    let mut last_frame = Instant::now();
-    let mut frame_stats = FrameStats::default();
+        controls: Controls::default(),
+        is_swapchain_dirty: false,
+        last_frame: Instant::now(),
+        frame_stats: FrameStats::default(),
 
-    event_loop.run(move |event, elwt| {
-        let app = &mut app; // Make sure it is dropped before base_app
+        base_app: None,
+        window: None,
+        app: None,
+        gui: None,
+    };
 
-        controls = controls.handle_event(&event);
-
-        match event {
-            Event::NewEvents(_) => {
-                let now = Instant::now();
-                let frame_time = now - last_frame;
-                last_frame = now;
-
-                frame_stats.set_frame_time(frame_time);
-
-                controls = controls.reset();
-            }
-            Event::WindowEvent { event, .. } => {
-                base_app.gui_context.handle_event(&window, &event);
-
-                match event {
-                    // On resize
-                    WindowEvent::Resized(..) => {
-                        is_swapchain_dirty = true;
-                    }
-                    // Keyboard
-                    WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                state,
-                                physical_key,
-                                ..
-                            },
-                        ..
-                    } => {
-                        if matches!(physical_key, PhysicalKey::Code(KeyCode::KeyR))
-                            && state == ElementState::Pressed
-                        {
-                            base_app.toggle_stats();
-                        }
-                    }
-                    // Mouse
-                    WindowEvent::MouseInput { state, button, .. } => {
-                        if button == MouseButton::Right {
-                            if state == ElementState::Pressed {
-                                window.set_cursor_visible(false);
-                            } else {
-                                window.set_cursor_visible(true);
-                            }
-                        }
-                    }
-                    // Exit app on request to close window
-                    WindowEvent::CloseRequested => elwt.exit(),
-                    _ => (),
-                }
-            }
-
-            // Draw
-            Event::AboutToWait => {
-                if is_swapchain_dirty || base_app.requested_swapchain_format.is_some() {
-                    let dim = window.inner_size();
-                    let format = base_app.requested_swapchain_format.take();
-
-                    if dim.width > 0 && dim.height > 0 {
-                        base_app
-                            .recreate_swapchain(dim.width, dim.height, format)
-                            .expect("Failed to recreate swapchain");
-                        app.on_recreate_swapchain(&base_app)
-                            .expect("Error on recreate swapchain callback");
-                    } else {
-                        return;
-                    }
-                }
-
-                base_app.camera = base_app.camera.update(&controls, frame_stats.frame_time);
-
-                is_swapchain_dirty = base_app
-                    .draw(&window, app, &mut ui, &mut frame_stats)
-                    .expect("Failed to tick");
-            }
-
-            // Wait for gpu to finish pending work before closing app
-            Event::LoopExiting => base_app
-                .wait_for_gpu()
-                .expect("Failed to wait for gpu to finish work"),
-            _ => (),
-        }
-    })?;
+    let event_loop = EventLoop::new().unwrap();
+    event_loop.set_control_flow(ControlFlow::Poll);
+    event_loop.run_app(&mut wrapper)?;
 
     Ok(())
+}
+
+struct AppWrapper<'a, A: App> {
+    app_name: &'a str,
+    width: u32,
+    height: u32,
+    app_config: AppConfig<'a, 'a>, // FIXME: lifetimes ?
+
+    controls: Controls,
+    is_swapchain_dirty: bool,
+    last_frame: Instant,
+    frame_stats: FrameStats,
+
+    window: Option<Window>,
+    app: Option<A>,
+    gui: Option<A::Gui>,
+    base_app: Option<BaseApp>,
+}
+
+impl<A: App> ApplicationHandler for AppWrapper<'_, A> {
+    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        let window = create_window(event_loop, self.app_name, self.width, self.height)
+            .expect("Failed to create window");
+        let mut base_app = BaseApp::new(&window, self.app_name, self.app_config)
+            .expect("Failed to create base app");
+
+        self.window = Some(window);
+        self.gui = Some(A::Gui::new(&base_app).expect("Failed to create gui"));
+        self.app = Some(A::new(&mut base_app).expect("Failed to create application"));
+        self.base_app = Some(base_app);
+    }
+
+    fn new_events(&mut self, _: &ActiveEventLoop, _: winit::event::StartCause) {
+        let now = Instant::now();
+        let frame_time = now - self.last_frame;
+        self.last_frame = now;
+
+        self.frame_stats.set_frame_time(frame_time);
+
+        self.controls = self.controls.reset();
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        _: winit::window::WindowId,
+        event: WindowEvent,
+    ) {
+        let base_app = self.base_app.as_mut().unwrap();
+
+        base_app
+            .gui_context
+            .handle_event(self.window.as_ref().unwrap(), &event);
+
+        self.controls = self.controls.handle_window_event(&event);
+
+        match event {
+            // On resize
+            WindowEvent::Resized(..) => {
+                self.is_swapchain_dirty = true;
+            }
+            // Keyboard
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        state,
+                        physical_key,
+                        ..
+                    },
+                ..
+            } => {
+                if matches!(physical_key, PhysicalKey::Code(KeyCode::KeyR))
+                    && state == ElementState::Pressed
+                {
+                    base_app.toggle_stats();
+                }
+            }
+            // Mouse
+            WindowEvent::MouseInput { state, button, .. } => {
+                if button == MouseButton::Right {
+                    if state == ElementState::Pressed {
+                        self.window.as_ref().unwrap().set_cursor_visible(false);
+                    } else {
+                        self.window.as_ref().unwrap().set_cursor_visible(true);
+                    }
+                }
+            }
+            // Exit app on request to close window
+            WindowEvent::CloseRequested => event_loop.exit(),
+            _ => (),
+        }
+    }
+
+    fn device_event(
+        &mut self,
+        _: &ActiveEventLoop,
+        _: winit::event::DeviceId,
+        event: winit::event::DeviceEvent,
+    ) {
+        self.controls = self.controls.handle_device_event(&event);
+    }
+
+    fn about_to_wait(&mut self, _: &ActiveEventLoop) {
+        let base_app = self.base_app.as_mut().unwrap();
+
+        if self.is_swapchain_dirty || base_app.requested_swapchain_format.is_some() {
+            let dim = self.window.as_ref().unwrap().inner_size();
+            let format = base_app.requested_swapchain_format.take();
+
+            if dim.width > 0 && dim.height > 0 {
+                base_app
+                    .recreate_swapchain(dim.width, dim.height, format)
+                    .expect("Failed to recreate swapchain");
+                self.app
+                    .as_mut()
+                    .unwrap()
+                    .on_recreate_swapchain(base_app)
+                    .expect("Error on recreate swapchain callback");
+            } else {
+                return;
+            }
+        }
+
+        base_app.camera = base_app
+            .camera
+            .update(&self.controls, self.frame_stats.frame_time);
+
+        self.is_swapchain_dirty = base_app
+            .draw(
+                self.window.as_ref().unwrap(),
+                self.app.as_mut().unwrap(),
+                self.gui.as_mut().unwrap(),
+                &mut self.frame_stats,
+            )
+            .expect("Failed to tick");
+    }
+
+    fn exiting(&mut self, _: &ActiveEventLoop) {
+        self.base_app
+            .as_mut()
+            .unwrap()
+            .wait_for_gpu()
+            .expect("Failed to wait for gpu when exiting")
+    }
 }
 
 fn setup_logs(app_name: &str, log_to_file: bool) {
@@ -262,18 +330,23 @@ fn setup_logs(app_name: &str, log_to_file: bool) {
     CombinedLogger::init(loggers).expect("logger");
 }
 
-fn create_window(app_name: &str, width: u32, height: u32) -> Result<(Window, EventLoop<()>)> {
-    log::debug!("Creating window and event loop");
-    let events_loop = EventLoop::new()?;
-    events_loop.set_control_flow(ControlFlow::Poll);
-    let window = WindowBuilder::new()
-        .with_title(app_name)
-        .with_inner_size(PhysicalSize::new(width, height))
-        .with_resizable(true)
-        .build(&events_loop)
-        .unwrap();
+fn create_window(
+    evt_loop: &ActiveEventLoop,
+    app_name: &str,
+    width: u32,
+    height: u32,
+) -> Result<Window> {
+    log::debug!("Creating window");
+    evt_loop.set_control_flow(ControlFlow::Poll);
 
-    Ok((window, events_loop))
+    let window = evt_loop.create_window(
+        Window::default_attributes()
+            .with_title(app_name)
+            .with_inner_size(PhysicalSize::new(width, height))
+            .with_resizable(true),
+    )?;
+
+    Ok(window)
 }
 
 impl BaseApp {

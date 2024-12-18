@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use glam::{vec3, Mat3, Mat4, Quat, Vec3};
 use winit::{
-    event::{DeviceEvent, ElementState, Event, KeyEvent, MouseButton, WindowEvent},
+    event::{DeviceEvent, ElementState, KeyEvent, MouseButton, WindowEvent},
     keyboard::{KeyCode, PhysicalKey},
 };
 
@@ -187,46 +187,45 @@ impl Controls {
         }
     }
 
-    pub fn handle_event(self, event: &Event<()>) -> Self {
+    pub fn handle_window_event(self, evt: &WindowEvent) -> Self {
         let mut new_state = self;
 
-        match event {
-            Event::WindowEvent { event, .. } => {
-                match event {
-                    WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                physical_key: PhysicalKey::Code(code),
-                                state,
-                                ..
-                            },
+        match evt {
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(code),
+                        state,
                         ..
-                    } => match *code {
-                        FORWARD_KEYCODE => new_state.go_forward = *state == ElementState::Pressed,
-                        BACKWARD_KEYCODE => new_state.go_backward = *state == ElementState::Pressed,
-                        RIGHT_KEYCODE => new_state.strafe_right = *state == ElementState::Pressed,
-                        LEFT_KEYCODE => new_state.strafe_left = *state == ElementState::Pressed,
-                        UP_KEYCODE => new_state.go_up = *state == ElementState::Pressed,
-                        DOWN_KEYCODE => new_state.go_down = *state == ElementState::Pressed,
-                        _ => (),
                     },
-                    WindowEvent::MouseInput { state, button, .. } => {
-                        if *button == MouseButton::Right {
-                            new_state.look_around = *state == ElementState::Pressed;
-                        }
-                    }
-                    _ => {}
-                };
-            }
-            Event::DeviceEvent {
-                event: DeviceEvent::MouseMotion { delta: (x, y) },
                 ..
-            } => {
-                let x = *x as f32;
-                let y = *y as f32;
-                new_state.cursor_delta = [self.cursor_delta[0] + x, self.cursor_delta[1] + y];
+            } => match *code {
+                FORWARD_KEYCODE => new_state.go_forward = *state == ElementState::Pressed,
+                BACKWARD_KEYCODE => new_state.go_backward = *state == ElementState::Pressed,
+                RIGHT_KEYCODE => new_state.strafe_right = *state == ElementState::Pressed,
+                LEFT_KEYCODE => new_state.strafe_left = *state == ElementState::Pressed,
+                UP_KEYCODE => new_state.go_up = *state == ElementState::Pressed,
+                DOWN_KEYCODE => new_state.go_down = *state == ElementState::Pressed,
+                _ => (),
+            },
+            WindowEvent::MouseInput { state, button, .. } => {
+                if *button == MouseButton::Right {
+                    new_state.look_around = *state == ElementState::Pressed;
+                }
             }
-            _ => (),
+            _ => {}
+        };
+
+        new_state
+    }
+
+    pub fn handle_device_event(self, evt: &DeviceEvent) -> Self {
+        let mut new_state = self;
+
+        if let DeviceEvent::MouseMotion { delta: (x, y) } = evt {
+            let x = *x as f32;
+            let y = *y as f32;
+            new_state.cursor_delta = [self.cursor_delta[0] + x, self.cursor_delta[1] + y];
         }
 
         new_state

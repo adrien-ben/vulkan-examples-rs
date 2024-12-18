@@ -27,7 +27,7 @@ impl GuiContext {
         in_flight_frames: usize,
     ) -> Result<Self> {
         let egui = EguiContext::default();
-        let platform = EguiWinit::new(egui.clone(), ViewportId::ROOT, &window, None, None);
+        let platform = EguiWinit::new(egui.clone(), ViewportId::ROOT, &window, None, None, None);
 
         let gui_renderer = Renderer::with_gpu_allocator(
             context.allocator.clone(),
@@ -58,7 +58,7 @@ impl GuiContext {
         self.egui_winit.take_egui_input(window)
     }
 
-    pub fn run(&self, new_input: RawInput, run_ui: impl FnOnce(&egui::Context)) -> FullOutput {
+    pub fn run(&self, new_input: RawInput, run_ui: impl FnMut(&egui::Context)) -> FullOutput {
         self.egui.run(new_input, run_ui)
     }
 
